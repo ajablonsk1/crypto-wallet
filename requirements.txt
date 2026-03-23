@@ -1,0 +1,8 @@
+web3>=6.0
+cryptography>=41.0
+argon2-cffi>=23.1
+bip-utils>=2.9
+eth-keys>=0.5
+customtkinter>=5.2
+requests>=2.31
+pytest>=7.4
