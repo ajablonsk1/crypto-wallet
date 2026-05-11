@@ -19,6 +19,17 @@
    pip install -r requirements.txt
    ```
 
+4. **Environment Variables**:
+   Create a `.env` file in the project root and specify your Sepolia RPC URL. By default, it will fall back to a public node, but for better stability, you should use your own provider like Infura or Alchemy (the URL will contain your API key).
+   ```env
+   # You can use a public node:
+   SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+   
+   # OR your own Infura/Alchemy node:
+   # SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_INFURA_API_KEY
+   ```
+   > **Note:** The `.env` file is included in `.gitignore`, so your API keys will not be committed to the repository.
+
 ## 🛠️ Dependencies
 
 Each requirement in the project serves a specific purpose:
@@ -31,3 +42,4 @@ Each requirement in the project serves a specific purpose:
 - **[customtkinter](https://pypi.org/project/customtkinter/)**: Modern, themed UI components for the desktop app.
 - **[requests](https://pypi.org/project/requests/)**: HTTP client for interacting with Etherscan API.
 - **[pytest](https://pypi.org/project/pytest/)**: Testing framework for unit and integration tests.
+- **[python-dotenv](https://pypi.org/project/python-dotenv/)**: Loads environment variables from a `.env` file (used for RPC configurations).

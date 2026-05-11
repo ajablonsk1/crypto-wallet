@@ -7,3 +7,4 @@ eth-keys>=0.5
 customtkinter>=5.2
 requests>=2.31
 pytest>=7.4
+python-dotenv>=1.0.0
