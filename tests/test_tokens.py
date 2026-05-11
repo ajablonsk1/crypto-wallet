@@ -1,4 +1,5 @@
 import os
+from decimal import Decimal
 from pathlib import Path
 import pytest
 from unittest.mock import patch
@@ -29,7 +30,7 @@ def test_get_token_info():
 
 def test_get_token_balance():
     balance = get_token_balance(VITALIK_ADDRESS, LINK_SEPOLIA)
-    assert isinstance(balance, float)
+    assert isinstance(balance, Decimal)
     assert balance >= 0
 
 def test_add_custom_token():

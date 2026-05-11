@@ -1,4 +1,5 @@
 import pytest
+from decimal import Decimal
 from unittest.mock import patch, MagicMock
 
 from wallet.network.tx import build_eth_tx, estimate_fee, sign_and_send, wait_for_receipt
@@ -12,7 +13,7 @@ def test_build_eth_tx():
     tx = build_eth_tx(
         from_address=VITALIK_ADDRESS,
         to_address=BURN_ADDRESS,
-        amount_eth=0.01
+        amount_eth=Decimal("0.01")
     )
     
     assert isinstance(tx, dict)
@@ -20,14 +21,14 @@ def test_build_eth_tx():
     assert "gasPrice" in tx
     assert tx["to"] == BURN_ADDRESS
     assert tx["value"] == 10000000000000000  # 0.01 ETH in Wei
-    assert tx["gas"] == 21000
+    assert tx["gas"] > 0  # gas is now dynamically estimated
     assert tx["chainId"] in (1, 11155111)  # Mainnet or Sepolia
 
 def test_estimate_fee():
     # Test fee estimation
-    fee = estimate_fee(to_address=BURN_ADDRESS, amount_eth=0.1)
+    fee = estimate_fee(to_address=BURN_ADDRESS, amount_eth=Decimal("0.1"))
     
-    assert isinstance(fee, float)
+    assert isinstance(fee, Decimal)
     assert fee > 0
 
 @patch("wallet.network.tx.get_provider")

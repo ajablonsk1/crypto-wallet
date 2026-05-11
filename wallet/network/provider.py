@@ -1,4 +1,5 @@
 import os
+from decimal import Decimal
 from web3 import Web3
 from dotenv import load_dotenv
 
@@ -16,13 +17,13 @@ def get_provider() -> Web3:
 def is_connected() -> bool:
     return get_provider().is_connected()
 
-def get_eth_balance(address: str) -> float:
+def get_eth_balance(address: str) -> Decimal:
     w3 = get_provider()
     checksum_address = w3.to_checksum_address(address)
     balance_wei = w3.eth.get_balance(checksum_address)
-    return float(w3.from_wei(balance_wei, "ether"))
+    return Decimal(w3.from_wei(balance_wei, "ether"))
 
-def get_gas_price() -> float:
+def get_gas_price() -> Decimal:
     w3 = get_provider()
     gas_price_wei = w3.eth.gas_price
-    return float(w3.from_wei(gas_price_wei, "gwei"))
+    return Decimal(w3.from_wei(gas_price_wei, "gwei"))

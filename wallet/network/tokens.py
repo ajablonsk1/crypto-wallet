@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from web3 import Web3
 
 from wallet.network.provider import get_provider
@@ -32,7 +34,7 @@ def get_token_info(token_contract_address: str) -> dict:
     except Exception as e:
         raise ValueError(f"Failed to fetch token info. Is it a valid ERC-20? Error: {e}")
 
-def get_token_balance(address: str, token_contract_address: str) -> float:
+def get_token_balance(address: str, token_contract_address: str) -> Decimal:
     w3 = get_provider()
     contract = get_token_contract(token_contract_address)
     
@@ -40,7 +42,7 @@ def get_token_balance(address: str, token_contract_address: str) -> float:
     raw_balance = contract.functions.balanceOf(checksum_address).call()
     decimals = contract.functions.decimals().call()
     
-    return raw_balance / (10 ** decimals)
+    return Decimal(raw_balance) / Decimal(10 ** decimals)
 
 def get_tracked_tokens() -> list[str]:
     return list(_tracked_tokens)
