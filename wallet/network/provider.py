@@ -11,7 +11,7 @@ def get_provider() -> Web3:
     global _w3_instance
     if _w3_instance is None:
         rpc_url = os.getenv("SEPOLIA_RPC_URL", "https://ethereum-sepolia-rpc.publicnode.com")
-        _w3_instance = Web3(Web3.HTTPProvider(rpc_url))
+        _w3_instance = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={'timeout': 10}))
     return _w3_instance
 
 def is_connected() -> bool:
