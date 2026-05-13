@@ -7,11 +7,11 @@ from wallet.crypto.keystore import create_keystore, load_keystore, InvalidPasswo
 class WelcomeScreen(ctk.CTkFrame):
 
     # ── color palette ──────────────────────────────────────────────
-    BG_COLOR = "#0A0B10"        # tło główne
-    PANEL_COLOR = "#15161E"     # panele
-    ACCENT_1 = "#00FFAA"        # neon zielony
-    ACCENT_2 = "#FF3377"        # neon różowy
-    LINK_COLOR = "#0077FF"      # niebieski
+    BG_COLOR = "#0A0B10"        
+    PANEL_COLOR = "#15161E"     
+    ACCENT_1 = "#00FFAA"        
+    ACCENT_2 = "#FF3377"        
+    LINK_COLOR = "#0077FF"
     TEXT_WHITE = "#FFFFFF"
     PLACEHOLDER_COLOR = "#666666"
 
@@ -32,22 +32,22 @@ class WelcomeScreen(ctk.CTkFrame):
 
         # ── mainframe ──────────────────────────────
         self.configure(fg_color=self.BG_COLOR)
-        self.grid_columnconfigure(0, weight=2)   # lewy panel – węższy
-        self.grid_columnconfigure(1, weight=3)   # prawy panel – szerszy
+        self.grid_columnconfigure(0, weight=2)
+        self.grid_columnconfigure(1, weight=3)
         self.grid_rowconfigure(0, weight=1)
 
         # ── interface ──────────────────────────────────────
         self._build_left_panel()
         self._build_right_panel()
 
-        # Generowanie mnemonica na start
+        # generate mnemonic on starrt
         self._on_generate_click()
 
     # ================================================================
     #  Unlock Wallet
     # ================================================================
     def _build_left_panel(self):
-        """Lewy panel z polem hasła i przyciskiem Unlock."""
+        """Left panel with password field and Unlock button."""
         self.left_frame = ctk.CTkFrame(
             self,
             fg_color=self.PANEL_COLOR,
@@ -113,7 +113,7 @@ class WelcomeScreen(ctk.CTkFrame):
             anchor="w"
         )
         self.unlock_error_label.grid(row=3, column=0, padx=self.PAD_LARGE, pady=(0, self.PAD_LARGE), sticky="w")
-        self.unlock_error_label.grid_remove()  # ukryj na starcie
+        self.unlock_error_label.grid_remove()  # hide on start
 
     # ================================================================
     # Create New Wallet
@@ -162,7 +162,6 @@ class WelcomeScreen(ctk.CTkFrame):
         self.create_error_label.grid_remove()
 
     def _build_mnemonic_grid(self):
-        """Tworzy 12 komórek ze słowami w układzie 4 kolumny × 3 wiersze."""
         grid_frame = ctk.CTkFrame(self.right_frame, fg_color="transparent")
         grid_frame.grid(row=1, column=0, padx=self.PAD_LARGE, pady=self.PAD_LARGE)
 

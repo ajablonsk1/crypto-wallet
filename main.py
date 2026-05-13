@@ -6,8 +6,8 @@ from wallet.gui.send import SendScreen
 
 class WalletApp(ctk.CTk):
     """
-    Główna aplikacja portfela kryptowalutowego.
-    Zarządza cyklem życia ekranów i nawigacją.
+    Main app
+    Manages life cycle of displays and navigation.
     """
 
     def __init__(self):
@@ -26,13 +26,13 @@ class WalletApp(ctk.CTk):
         self.show_welcome()
 
     def _clear_screen(self):
-        """Usuwa aktualny ekran, jeśli istnieje."""
+        """Remove current screen if exists"""
         if self.current_screen is not None:
             self.current_screen.destroy()
             self.current_screen = None
 
     def show_welcome(self):
-        """Pokazuje ekran powitalny."""
+        """Shows welcome screen"""
         self.seed = None
         self._clear_screen()
         self.geometry("1000x600")
