@@ -76,7 +76,7 @@ def estimate_fee(to_address: str, amount_eth: Decimal) -> Decimal:
         gas_limit = int(w3.eth.estimate_gas(tx) * _get_gas_buffer())
     except Exception as e:
         raise ValueError(f"Gas estimation failed: {e}")
-        
+
     fee_wei = gas_limit * w3.eth.gas_price
     return Decimal(w3.from_wei(fee_wei, 'ether'))
 

@@ -20,14 +20,8 @@ from wallet.network.tx import (
 
 
 class SendScreen(ctk.CTkFrame):
-    """
-    Ekran wysyłania kryptowalut.
-    Przyjmuje seed, oblicza adres i klucz prywatny.
-    Ładuje dostępne tokeny, umożliwia wybór, podanie kwoty,
-    szybkie procenty, estymację gazu i wysyłkę.
-    """
 
-    # ── Paleta kolorów ──────────────────────────────────────────────
+    # ── color palette ──────────────────────────────────────────────
     BG_COLOR = "#0A0B10"
     PANEL_COLOR = "#15161E"
     ACCENT_1 = "#00FFAA"
@@ -46,24 +40,26 @@ class SendScreen(ctk.CTkFrame):
     CORNER_RADIUS = 15
     ENTRY_HEIGHT = 45
 
-    def __init__(self, master, seed: Optional[bytes] = None, **kwargs):
+    def __init__(self, master, seed: Optional[bytes] = None, account_index: int = 0, **kwargs):
         super().__init__(master, **kwargs)
+        self.seed = seed
+        self.account_index = account_index
         self.configure(fg_color=self.BG_COLOR)
 
-        # Atrybuty backendu
+        # backend attributes
         self.seed = seed
         self.private_key: Optional[bytes] = None
         self.address: Optional[str] = None
         if self.seed is not None:
             self._init_keys()
 
-        # Dane dynamiczne
-        self.tokens: List[Dict] = []  # lista: {symbol, contract?, balance}
+        # dynamic data
+        self.tokens: List[Dict] = []
         self.eth_balance = Decimal("0")
         self.token_balances: Dict[str, Decimal] = {}  # symbol -> Decimal
-        self.gas_fee_eth = Decimal("0.0021")  # domyślna placeholder
+        self.gas_fee_eth = Decimal("0.0021")  # placeholder
 
-        # Referencje do widgetów
+        # widget refference
         self.recipient_entry: Optional[ctk.CTkEntry] = None
         self.amount_entry: Optional[ctk.CTkEntry] = None
         self.token_menu: Optional[ctk.CTkOptionMenu] = None
@@ -72,45 +68,41 @@ class SendScreen(ctk.CTkFrame):
         self.error_label: Optional[ctk.CTkLabel] = None
 
         # State
-        self._sending = False  # blokada przed wielokrotnym wysyłaniem
+        self._sending = False  # cannot send multiple times
         self._active = True
 
-        # Callbacki nawigacyjne
+        # navi callbacks
         self.on_back_to_dashboard: Optional[Callable] = None
 
-        # Główny kontener
+        # main container
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
         self._build_form()
 
-        # Po zbudowaniu UI, załaduj tokeny w tle
+        # after creating UI, load tokens in background
         if self.address:
             threading.Thread(target=self._load_tokens_and_balance, daemon=True).start()
 
     def _init_keys(self):
-        """Oblicza klucz prywatny i adres z seedu."""
         try:
-            self.private_key = derive_private_key(self.seed, 0)
+            self.private_key = derive_private_key(self.seed, self.account_index)
             self.address = private_key_to_address(self.private_key)
         except Exception as e:
             print(f"[Send] Key derivation error: {e}")
             self.address = "0x0000000000000000000000000000000000000000"
 
     def _load_tokens_and_balance(self):
-        """Ładuje saldo ETH i listę tokenów."""
         try:
-            # Saldo ETH
+            # ETH balance
             self.eth_balance = get_eth_balance(self.address)
             self.token_balances["ETH"] = self.eth_balance
 
-            # Tokeny ERC-20
+            # ERC-20 tokens
             tracked = get_tracked_tokens()
             token_tmp = []
             for contract in tracked:
                 try:
                     bal = get_token_balance(self.address, contract)
-                    # Potrzebujemy symbol – zakładamy, że możemy użyć nazwy kontraktu
-                    # W praktyce get_token_info, ale uproszczamy
                     symbol = contract[:4].upper()  # placeholder
                     token_tmp.append({
                         "symbol": symbol,
@@ -121,10 +113,10 @@ class SendScreen(ctk.CTkFrame):
                 except Exception as e:
                     print(f"[Send] Token load error {contract}: {e}")
 
-            # Ustaw ETH jako pierwszy
+            # set ETH as first
             self.tokens = [{"symbol": "ETH", "contract": None, "balance": self.eth_balance}] + token_tmp
 
-            # Aktualizacja UI w głównym wątku
+            # update UI in main thread
             if self._active:
                 self.after(0, self._update_token_menu)
 
@@ -136,12 +128,9 @@ class SendScreen(ctk.CTkFrame):
         symbols = [t["symbol"] for t in self.tokens]
         if symbols:
             self.token_menu.configure(values=symbols)
-            # Nie zmieniamy aktywnego wyboru – pozostaje "ETH" (pierwszy)
-            # Odświeżamy widok gazu i kwoty
             self._update_gas_fee()
 
     def _build_form(self):
-        """Tworzy centralny panel formularza."""
         form_frame = ctk.CTkFrame(
             self,
             fg_color=self.PANEL_COLOR,
@@ -151,10 +140,10 @@ class SendScreen(ctk.CTkFrame):
             width=self.FORM_WIDTH,
         )
         form_frame.grid(row=0, column=0, padx=self.PAD_LARGE, pady=self.PAD_LARGE)
-        form_frame.grid_propagate(False)
+        # form_frame.grid_propagate(False)
         form_frame.grid_columnconfigure(0, weight=1)
 
-        # ── Nagłówek + przycisk powrotu ──────────────────────────
+        # ── Header + back button ──────────────────────────
         header_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
         header_frame.grid(row=0, column=0, padx=self.PAD_SMALL, pady=(self.PAD_LARGE, self.PAD_SMALL), sticky="ew")
         header_frame.grid_columnconfigure(0, weight=1)
@@ -309,16 +298,14 @@ class SendScreen(ctk.CTkFrame):
         self.send_button.grid(row=7, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_LARGE), sticky="ew")
 
     # ================================================================
-    #  DYNAMICZNE AKTUALIZACJE
+    #  dynamic updates
     # ================================================================
     def _schedule_gas_update(self):
-        """Opóźnia aktualizację gazu (debounce)."""
         if hasattr(self, '_gas_timer') and self._gas_timer:
             self.after_cancel(self._gas_timer)
         self._gas_timer = self.after(500, self._update_gas_fee)
 
     def _update_gas_fee(self):
-        """Oblicza szacunkową opłatę gazową dla aktualnego tokena i kwoty."""
         token = self.token_menu.get()
         amount_str = self.amount_entry.get().strip()
         if not amount_str:
@@ -331,16 +318,16 @@ class SendScreen(ctk.CTkFrame):
             self.gas_label.configure(text="Invalid amount")
             return
 
-        # Uruchom estymację w tle
+        # run estimation in background
         threading.Thread(target=self._estimate_gas_background, args=(token, amount), daemon=True).start()
 
     def _estimate_gas_background(self, token: str, amount: Decimal):
-        """W tle oblicza opłatę gazową."""
+        # estimate gas fee in background
         try:
             if token == "ETH":
                 fee = estimate_fee(self.address, amount)  # zakładamy, że zwraca Decimal w ETH
             else:
-                # Dla tokenów ERC-20 znajdź kontrakt
+                # find contract for 20 ERC-20 tokens 
                 contract = None
                 for t in self.tokens:
                     if t["symbol"] == token:
@@ -353,7 +340,7 @@ class SendScreen(ctk.CTkFrame):
 
             self.gas_fee_eth = fee
             fee_str = f"{fee:.6f} ETH"
-            # Można dodać wartość w USD, ale na razie tylko ETH
+            # might add USB but for now work with ETH
             self.after(0, lambda: self._update_gas_label(fee_str))
         except Exception as e:
             print(f"[Gas] Estimation error: {e}")
@@ -366,31 +353,28 @@ class SendScreen(ctk.CTkFrame):
     def _on_token_change(self, choice: str):
         """Callback zmiany tokena."""
         print(f"[Send] Token changed to: {choice}")
-        # Odśwież estymację gazu
+        # refresh gas estimation
         self._schedule_gas_update()
 
     def _quick_percent(self, fraction: float):
-        """Ustawia kwotę jako procent balansu wybranego tokena."""
         token = self.token_menu.get()
         balance = self.token_balances.get(token, Decimal("0"))
         amount = balance * Decimal(str(fraction))
         self.amount_entry.delete(0, "end")
-        # Formatowanie: do 6 miejsc po przecinku
         formatted = f"{amount:.6f}".rstrip('0').rstrip('.')
         if formatted == "": formatted = "0"
         self.amount_entry.insert(0, formatted)
-        # Odśwież gaz
+        # refresh gas
         self._schedule_gas_update()
 
     # ================================================================
-    #  WYSYŁKA TRANSAKCJI
+    #  send transaction
     # ================================================================
     def _on_send_click(self):
-        """Rozpoczęcie procesu wysyłania: najpierw estymacja, potem modal."""
         if self._sending:
             return  # blokada
 
-        # Walidacja pól
+        # field validation
         recipient = self.recipient_entry.get().strip()
         amount_str = self.amount_entry.get().strip()
         if not recipient or not amount_str:
@@ -406,22 +390,19 @@ class SendScreen(ctk.CTkFrame):
             return
 
         token = self.token_menu.get()
-        # Sprawdź czy saldo wystarczy
         balance = self.token_balances.get(token, Decimal("0"))
         if amount > balance:
             self.error_label.configure(text=f"Insufficient {token} balance")
             return
 
-        # Wyczyść błąd
         self.error_label.configure(text="")
 
-        # Wywołaj estymację w tle i po zakończeniu otwórz modal
         self._sending = True
         self.send_button.configure(state="disabled", text="⏳ Estimating...")
         threading.Thread(target=self._prepare_and_show_modal, args=(recipient, amount, token), daemon=True).start()
 
     def _prepare_and_show_modal(self, recipient: str, amount: Decimal, token: str):
-        """Estymuje gaz, potem otwiera modal potwierdzenia."""
+        # gas estimation and show modal
         try:
             if token == "ETH":
                 fee = estimate_fee(self.address, amount)
@@ -437,7 +418,6 @@ class SendScreen(ctk.CTkFrame):
 
             self.gas_fee_eth = fee
 
-            # Po estymacji, otwórz modal w głównym wątku
             self.after(0, lambda: self._show_confirmation_modal(recipient, amount, token, fee))
 
         except Exception as e:
@@ -446,12 +426,10 @@ class SendScreen(ctk.CTkFrame):
             self.after(0, lambda: self.error_label.configure(text=f"Estimation failed: {str(e)[:50]}"))
 
     def _reset_send_button(self):
-        """Przywraca przycisk do stanu początkowego."""
         self._sending = False
         self.send_button.configure(state="normal", text="🚀 Send")
 
     def _show_confirmation_modal(self, recipient: str, amount: Decimal, token: str, gas_fee: Decimal):
-        """Tworzy i wyświetla modal potwierdzenia."""
         master_window = self.winfo_toplevel()
         total_str = f"{amount} {token} + {gas_fee:.6f} ETH"
 
@@ -468,15 +446,13 @@ class SendScreen(ctk.CTkFrame):
         modal.grab_set()  # modalne
 
     def _send_transaction(self, recipient: str, amount: Decimal, token: str, gas_fee: Decimal):
-        """Wykonuje transakcję w tle i aktualizuje UI."""
-        # Zablokuj UI
+        # block UI
         self.send_button.configure(state="disabled", text="⏳ Sending...")
         self._sending = True
 
         threading.Thread(target=self._send_background, args=(recipient, amount, token, gas_fee), daemon=True).start()
 
     def _send_background(self, recipient: str, amount: Decimal, token: str, gas_fee: Decimal):
-        """W tle buduje, podpisuje i wysyła transakcję."""
         try:
             if token == "ETH":
                 tx = build_eth_tx(self.address, recipient, amount)
@@ -490,10 +466,10 @@ class SendScreen(ctk.CTkFrame):
                     raise ValueError("Token contract not found")
                 tx = build_token_tx(self.address, recipient, contract, amount)
 
-            # Podpisz i wyślij
+            # sign and send
             tx_hash = sign_and_send(tx, self.private_key)
 
-            # Sukces
+            # success
             self.after(0, lambda: self._on_send_success(tx_hash))
 
         except Exception as e:
@@ -501,26 +477,25 @@ class SendScreen(ctk.CTkFrame):
             self.after(0, lambda: self._on_send_error(str(e)))
 
     def _on_send_success(self, tx_hash: str):
-        """Aktualizuje UI po pomyślnej transakcji."""
+        # update ui after successful transaction
         if not self._active:
             return
         self.error_label.configure(text=f"✅ Transaction sent! Hash: {tx_hash[:10]}...", text_color=self.SUCCESS_COLOR)
         self._reset_send_button()
-        # Czyścimy pola
+        # clear fields
         self.recipient_entry.delete(0, "end")
         self.amount_entry.delete(0, "end")
-        # Odśwież balanse w tle
+        # balance refresh in background
         threading.Thread(target=self._load_tokens_and_balance, daemon=True).start()
 
     def _on_send_error(self, error_msg: str):
-        """Aktualizuje UI po błędzie."""
         if not self._active:
             return
         self.error_label.configure(text=f"❌ {error_msg}", text_color=self.ERROR_COLOR)
         self._reset_send_button()
 
     # ================================================================
-    #  CALLBACKI NAWIGACJI
+    #  navi callbacks
     # ================================================================
     def destroy(self):
         self._active = False
@@ -532,12 +507,6 @@ class SendScreen(ctk.CTkFrame):
 
 
 class ConfirmationModal(ctk.CTkToplevel):
-    """
-    Modal potwierdzenia transakcji.
-    Wyświetla szczegóły: odbiorca, kwota, opłata gazowa, całkowity koszt.
-    Przyciski: Cancel i Confirm.
-    """
-
     def __init__(self, master, recipient: str, amount: str, token: str,
                  gas_fee: str, total: str,
                  on_confirm: Optional[Callable] = None,
@@ -547,15 +516,16 @@ class ConfirmationModal(ctk.CTkToplevel):
         self.on_cancel = on_cancel
         self._action_taken = False
 
-        # Konfiguracja okna
+        # window configuration
         self.title("Confirm Transaction")
         self.geometry("480x360")
         self.resizable(False, False)
         self.configure(fg_color="#0A0B10")
         self.transient(master)
+        self.wait_visibility()
         self.grab_set()
 
-        # Główna ramka
+        # mainframe
         main_frame = ctk.CTkFrame(
             self,
             fg_color="#15161E",
@@ -565,7 +535,7 @@ class ConfirmationModal(ctk.CTkToplevel):
         )
         main_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
-        # Nagłówek
+        # header
         ctk.CTkLabel(
             main_frame,
             text="🔐 Confirm Transaction",
@@ -573,7 +543,7 @@ class ConfirmationModal(ctk.CTkToplevel):
             text_color="#00FFAA"
         ).pack(pady=(20, 10))
 
-        # Szczegóły
+        # details
         details_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         details_frame.pack(fill="x", padx=30, pady=10)
 
@@ -601,7 +571,10 @@ class ConfirmationModal(ctk.CTkToplevel):
         add_detail("Gas Fee:", gas_fee, value_color="#FFAA00")
         add_detail("Total:", total, value_color="#FFFFFF")
 
-        # Przyciski
+        self.update_idletasks()
+
+        
+        # buttons
         btn_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         btn_frame.pack(fill="x", padx=30, pady=(20, 20))
         btn_frame.grid_columnconfigure(0, weight=1)
@@ -657,7 +630,7 @@ class ConfirmationModal(ctk.CTkToplevel):
         self.destroy()
 
 
-# ── Test uruchomieniowy ─────────────────────────────────────────────
+# ── Test  ─────────────────────────────────────────────
 if __name__ == "__main__":
     ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("green")
@@ -667,7 +640,7 @@ if __name__ == "__main__":
     root.geometry("800x600")
     root.minsize(700, 500)
 
-    # Do testów – wygeneruj fałszywy seed
+    # generate false seed - for test
     fake_seed = bytes(32)
     app = SendScreen(root, seed=fake_seed)
     app.pack(fill="both", expand=True)

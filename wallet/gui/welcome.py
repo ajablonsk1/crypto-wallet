@@ -5,12 +5,8 @@ from wallet.crypto.mnemonic import generate_mnemonic, validate_mnemonic, mnemoni
 from wallet.crypto.keystore import create_keystore, load_keystore, InvalidPasswordError
 
 class WelcomeScreen(ctk.CTkFrame):
-    """
-    Ekran powitalny portfela kryptowalutowego.
-    Zawiera dwa panele: odblokowanie portfela (lewy) i tworzenie nowego (prawy).
-    """
 
-    # ── Paleta kolorów ──────────────────────────────────────────────
+    # ── color palette ──────────────────────────────────────────────
     BG_COLOR = "#0A0B10"        # tło główne
     PANEL_COLOR = "#15161E"     # panele
     ACCENT_1 = "#00FFAA"        # neon zielony
@@ -19,7 +15,7 @@ class WelcomeScreen(ctk.CTkFrame):
     TEXT_WHITE = "#FFFFFF"
     PLACEHOLDER_COLOR = "#666666"
 
-    # ── Rozmiary i padding ─────────────────────────────────────────
+    # ── size and padding ─────────────────────────────────────────
     PAD_LARGE = 30
     PAD_SMALL = 20
     PAD_TINY = 10
@@ -34,13 +30,13 @@ class WelcomeScreen(ctk.CTkFrame):
         self.seed = None
         self._active = True
 
-        # ── Główna konfiguracja ramki ──────────────────────────────
+        # ── mainframe ──────────────────────────────
         self.configure(fg_color=self.BG_COLOR)
         self.grid_columnconfigure(0, weight=2)   # lewy panel – węższy
         self.grid_columnconfigure(1, weight=3)   # prawy panel – szerszy
         self.grid_rowconfigure(0, weight=1)
 
-        # ── Budowa interfejsu ──────────────────────────────────────
+        # ── interface ──────────────────────────────────────
         self._build_left_panel()
         self._build_right_panel()
 
@@ -48,7 +44,7 @@ class WelcomeScreen(ctk.CTkFrame):
         self._on_generate_click()
 
     # ================================================================
-    #  LEWY PANEL – Unlock Wallet
+    #  Unlock Wallet
     # ================================================================
     def _build_left_panel(self):
         """Lewy panel z polem hasła i przyciskiem Unlock."""
@@ -71,7 +67,7 @@ class WelcomeScreen(ctk.CTkFrame):
         self.left_frame.grid_rowconfigure(3, weight=1)  # spacer
         self.left_frame.grid_columnconfigure(0, weight=1)
 
-        # Tytuł
+        # title
         ctk.CTkLabel(
             self.left_frame,
             text="🔓 Unlock Wallet",
@@ -79,7 +75,7 @@ class WelcomeScreen(ctk.CTkFrame):
             text_color=self.ACCENT_1
         ).grid(row=0, column=0, padx=self.PAD_LARGE, pady=(self.PAD_LARGE, self.PAD_SMALL), sticky="w")
 
-        # Pole hasła
+        # password
         self.password_entry = ctk.CTkEntry(
             self.left_frame,
             placeholder_text="Enter your password",
@@ -96,7 +92,7 @@ class WelcomeScreen(ctk.CTkFrame):
             sticky="ew"
         )
 
-        # Przycisk Unlock
+        # unlock
         ctk.CTkButton(
             self.left_frame,
             text="🚀 Unlock",
@@ -108,7 +104,7 @@ class WelcomeScreen(ctk.CTkFrame):
             command=self._on_unlock_click
         ).grid(row=2, column=0, padx=self.PAD_LARGE, pady=(0, self.PAD_SMALL), sticky="ew")
 
-        # Etykieta błędu (ukryta domyślnie)
+        # error label
         self.unlock_error_label = ctk.CTkLabel(
             self.left_frame,
             text="",
@@ -120,7 +116,7 @@ class WelcomeScreen(ctk.CTkFrame):
         self.unlock_error_label.grid_remove()  # ukryj na starcie
 
     # ================================================================
-    #  PRAWY PANEL – Create New Wallet
+    # Create New Wallet
     # ================================================================
     def _build_right_panel(self):
         """Prawy panel z siatką mnemoniczną i przyciskami."""
@@ -142,21 +138,19 @@ class WelcomeScreen(ctk.CTkFrame):
         self.right_frame.grid_rowconfigure(2, weight=0)  # buttons
         self.right_frame.grid_columnconfigure(0, weight=1)
 
-        # Tytuł
+        # title
         ctk.CTkLabel(
             self.right_frame,
             text="🪙 Create New Wallet",
             font=ctk.CTkFont(family="Inter", size=26, weight="bold"),
             text_color=self.ACCENT_2
         ).grid(row=0, column=0, padx=self.PAD_LARGE, pady=(self.PAD_LARGE, self.PAD_SMALL), sticky="w")
-
-        # ── Siatka 4×3 pól mnemonicznych ──────────────────────────
         self._build_mnemonic_grid()
 
-        # ── Przyciski akcji ────────────────────────────────────────
+        # ── buttons ────────────────────────────────────────
         self._build_action_buttons()
 
-        # Etykieta błędu dla Create Wallet
+        # error label
         self.create_error_label = ctk.CTkLabel(
             self.right_frame,
             text="",
@@ -170,7 +164,6 @@ class WelcomeScreen(ctk.CTkFrame):
     def _build_mnemonic_grid(self):
         """Tworzy 12 komórek ze słowami w układzie 4 kolumny × 3 wiersze."""
         grid_frame = ctk.CTkFrame(self.right_frame, fg_color="transparent")
-        # Wyśrodkowanie wertykalne i horyzontalne
         grid_frame.grid(row=1, column=0, padx=self.PAD_LARGE, pady=self.PAD_LARGE)
 
         self.mnemonic_labels = []
@@ -182,20 +175,19 @@ class WelcomeScreen(ctk.CTkFrame):
             for col in range(4):
                 index = row * 4 + col
                 
-                # Komórka (Cell) ze stałymi wymiarami
+                # cell frame
                 cell_frame = ctk.CTkFrame(
                     grid_frame, 
                     width=120, 
                     height=45, 
-                    fg_color="#0A1510",  # Bardzo ciemny zielony (symulacja przezroczystości)
+                    fg_color="#0A1510",
                     border_width=1,
                     border_color="#005533",
                     corner_radius=8
                 )
                 cell_frame.grid(row=row, column=col, padx=8, pady=8)
-                cell_frame.grid_propagate(False) # Zablokowanie zmiany rozmiaru przez dzieci
+                cell_frame.grid_propagate(False)
                 
-                # Numer słowa (w lewym górnym rogu)
                 num_label = ctk.CTkLabel(
                     cell_frame, 
                     text=str(index + 1), 
@@ -204,7 +196,6 @@ class WelcomeScreen(ctk.CTkFrame):
                 )
                 num_label.place(x=6, y=2)
                 
-                # Słowo (na środku)
                 word_label = ctk.CTkLabel(
                     cell_frame,
                     text=sample_words[index],
@@ -216,7 +207,6 @@ class WelcomeScreen(ctk.CTkFrame):
                 self.mnemonic_labels.append(word_label)
 
     def _build_action_buttons(self):
-        """Tworzy rząd przycisków: Copy, Generate New, Create Wallet."""
         btn_frame = ctk.CTkFrame(self.right_frame, fg_color="transparent")
         btn_frame.grid(row=2, column=0, padx=self.PAD_LARGE, pady=(0, self.PAD_LARGE), sticky="ew")
         btn_frame.grid_columnconfigure((0, 1, 2), weight=1)
@@ -246,7 +236,7 @@ class WelcomeScreen(ctk.CTkFrame):
         )
         self.generate_btn.grid(row=0, column=1, padx=4, sticky="ew")
 
-        # Create Wallet (główny CTA)
+        # Create Wallet
         ctk.CTkButton(
             btn_frame,
             text="✨ Create Wallet",
@@ -259,14 +249,13 @@ class WelcomeScreen(ctk.CTkFrame):
         ).grid(row=0, column=2, padx=(4, 0), sticky="ew")
 
     # ================================================================
-    #  CALLBACKI (placeholdery – logika krypto do implementacji)
+    #  CALLBACKS 
     # ================================================================
     def destroy(self):
         self._active = False
         super().destroy()
 
     def _on_unlock_click(self):
-        """Odblokowanie portfela hasłem."""
         password = self.password_entry.get()
         if not password:
             self._show_unlock_error("Password cannot be empty.")
@@ -301,7 +290,6 @@ class WelcomeScreen(ctk.CTkFrame):
         self.password_entry.configure(border_color=self.ACCENT_1)
 
     def _on_copy_click(self):
-        """Kopiowanie frazy mnemonicznej."""
         words = [label.cget("text") for label in self.mnemonic_labels]
         mnemonic = " ".join(words)
         self.clipboard_clear()
@@ -309,7 +297,6 @@ class WelcomeScreen(ctk.CTkFrame):
         print(f"[Copy] Mnemonic phrase copied")
 
     def _on_generate_click(self):
-        """Generowanie nowej frazy mnemonicznej."""
         if hasattr(self, 'generate_btn'):
             self.generate_btn.configure(state="disabled")
         words = generate_mnemonic(strength=128)
@@ -319,7 +306,6 @@ class WelcomeScreen(ctk.CTkFrame):
             self.generate_btn.configure(state="normal")
 
     def _on_create_wallet_click(self):
-        """Tworzenie nowego portfela."""
         words = [label.cget("text") for label in self.mnemonic_labels]
         if not validate_mnemonic(words):
             self._show_create_error("Invalid mnemonic phrase.")
@@ -327,7 +313,6 @@ class WelcomeScreen(ctk.CTkFrame):
 
         self._clear_create_error()
 
-        # Otwieramy własny modal do podania hasła
         dialog = PasswordModal(self.winfo_toplevel())
         self.wait_window(dialog)
         password = dialog.get_password()
@@ -356,9 +341,8 @@ class WelcomeScreen(ctk.CTkFrame):
 
 
 class PasswordModal(ctk.CTkToplevel):
-    """
-    Stylowany na neon modal do tworzenia hasła.
-    """
+
+    # Super stylish neon style.
     def __init__(self, master, **kwargs):
         super().__init__(master, **kwargs)
         self._password = None
@@ -368,6 +352,8 @@ class PasswordModal(ctk.CTkToplevel):
         self.resizable(False, False)
         self.configure(fg_color="#0A0B10")
         self.transient(master)
+
+        self.wait_visibility()
         self.grab_set()
 
         main_frame = ctk.CTkFrame(self, fg_color="#15161E", corner_radius=15, border_width=1, border_color="#00FFAA")
@@ -413,10 +399,10 @@ class PasswordModal(ctk.CTkToplevel):
     def get_password(self):
         return self._password
 
-# ── Test / uruchomienie standalone ──────────────────────────────────
+# ── Tests
 if __name__ == "__main__":
     ctk.set_appearance_mode("dark")
-    ctk.set_default_color_theme("green")   # podstawowa paleta CTk
+    ctk.set_default_color_theme("green")
 
     root = ctk.CTk()
     root.title("Crypto Wallet – Welcome")
