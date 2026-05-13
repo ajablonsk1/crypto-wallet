@@ -7,8 +7,8 @@ from typing import Optional
 
 from wallet.network.provider import get_provider
 
-ETHERSCAN_API_URL = os.getenv("ETHERSCAN_API_URL", "https://api-sepolia.etherscan.io/api")
-
+#ETHERSCAN_API_URL = os.getenv("ETHERSCAN_API_URL", "https://api-sepolia.etherscan.io/api")
+ETHERSCAN_API_URL = os.getenv("ETHERSCAN_API_URL", "https://api.etherscan.io/v2/api")
 if not ETHERSCAN_API_URL.startswith("https://"):
     raise ValueError("ETHERSCAN_API_URL must use HTTPS")
 
@@ -45,7 +45,8 @@ def get_transaction_history(address: str, page: int = 1, limit: int = 25, token_
             "page": page,
             "offset": limit,
             "sort": "desc",
-            "apikey": api_key
+            "apikey": api_key,
+            "chainid": 11155111
         }
     else:
         params = {
@@ -55,7 +56,8 @@ def get_transaction_history(address: str, page: int = 1, limit: int = 25, token_
             "page": page,
             "offset": limit,
             "sort": "desc",
-            "apikey": api_key
+            "apikey": api_key,
+            "chainid": 11155111
         }
         
     max_retries = 3
