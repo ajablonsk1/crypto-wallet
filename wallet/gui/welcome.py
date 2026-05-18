@@ -64,7 +64,8 @@ class WelcomeScreen(ctk.CTkFrame):
         self.left_frame.grid_rowconfigure(0, weight=0)  # title
         self.left_frame.grid_rowconfigure(1, weight=0)  # entry
         self.left_frame.grid_rowconfigure(2, weight=0)  # button
-        self.left_frame.grid_rowconfigure(3, weight=1)  # spacer
+        self.left_frame.grid_rowconfigure(3, weight=0)  # show/hide toggle
+        self.left_frame.grid_rowconfigure(4, weight=1)  # spacer (error label)
         self.left_frame.grid_columnconfigure(0, weight=1)
 
         # title
@@ -104,6 +105,21 @@ class WelcomeScreen(ctk.CTkFrame):
             command=self._on_unlock_click
         ).grid(row=2, column=0, padx=self.PAD_LARGE, pady=(0, self.PAD_SMALL), sticky="ew")
 
+        # show/hide password toggle
+        self._unlock_show_password = False
+        self.unlock_show_btn = ctk.CTkButton(
+            self.left_frame,
+            text="👁 Show password",
+            font=ctk.CTkFont(family="Inter", size=12),
+            fg_color="transparent",
+            text_color=self.PLACEHOLDER_COLOR,
+            hover_color=self.PANEL_COLOR,
+            height=24,
+            anchor="w",
+            command=self._toggle_unlock_password,
+        )
+        self.unlock_show_btn.grid(row=3, column=0, padx=self.PAD_LARGE, pady=(0, 4), sticky="w")
+
         # error label
         self.unlock_error_label = ctk.CTkLabel(
             self.left_frame,
@@ -112,7 +128,7 @@ class WelcomeScreen(ctk.CTkFrame):
             text_color="#FF3355",
             anchor="w"
         )
-        self.unlock_error_label.grid(row=3, column=0, padx=self.PAD_LARGE, pady=(0, self.PAD_LARGE), sticky="w")
+        self.unlock_error_label.grid(row=4, column=0, padx=self.PAD_LARGE, pady=(0, self.PAD_LARGE), sticky="w")
         self.unlock_error_label.grid_remove()  # hide on start
 
     # ================================================================
@@ -279,6 +295,11 @@ class WelcomeScreen(ctk.CTkFrame):
         if self.on_unlock_success:
             self.on_unlock_success(self.seed)
 
+    def _toggle_unlock_password(self):
+        self._unlock_show_password = not self._unlock_show_password
+        self.password_entry.configure(show="" if self._unlock_show_password else "*")
+        self.unlock_show_btn.configure(text="🙈 Hide password" if self._unlock_show_password else "👁 Show password")
+
     def _show_unlock_error(self, message: str):
         self.unlock_error_label.configure(text=message)
         self.unlock_error_label.grid()
@@ -347,7 +368,7 @@ class PasswordModal(ctk.CTkToplevel):
         self._password = None
         
         self.title("Set Wallet Password")
-        self.geometry("400x350")
+        self.geometry("400x390")
         self.resizable(False, False)
         self.configure(fg_color="#0A0B10")
         self.transient(master)
@@ -355,19 +376,30 @@ class PasswordModal(ctk.CTkToplevel):
         self.wait_visibility()
         self.grab_set()
 
+        self._show_password = False
+
         main_frame = ctk.CTkFrame(self, fg_color="#15161E", corner_radius=15, border_width=1, border_color="#00FFAA")
         main_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
         ctk.CTkLabel(main_frame, text="🔒 Set Password", font=ctk.CTkFont(family="Inter", size=22, weight="bold"), text_color="#00FFAA").pack(pady=(20, 10))
-        
+
         self.pass_entry = ctk.CTkEntry(main_frame, placeholder_text="Enter password", show="*", font=ctk.CTkFont(family="Inter", size=14), fg_color="#0A0B10", border_color="#00FFAA", text_color="#FFFFFF", height=40)
-        self.pass_entry.pack(fill="x", padx=30, pady=(10, 10))
+        self.pass_entry.pack(fill="x", padx=30, pady=(10, 4))
 
         self.confirm_entry = ctk.CTkEntry(main_frame, placeholder_text="Confirm password", show="*", font=ctk.CTkFont(family="Inter", size=14), fg_color="#0A0B10", border_color="#00FFAA", text_color="#FFFFFF", height=40)
-        self.confirm_entry.pack(fill="x", padx=30, pady=(0, 10))
+        self.confirm_entry.pack(fill="x", padx=30, pady=(0, 4))
+
+        self.show_btn = ctk.CTkButton(
+            main_frame, text="👁 Show password",
+            font=ctk.CTkFont(family="Inter", size=12),
+            fg_color="transparent", text_color="#666666",
+            hover_color="#1A1B24", height=24,
+            command=self._toggle_show_password,
+        )
+        self.show_btn.pack(anchor="w", padx=26, pady=(0, 4))
 
         self.error_label = ctk.CTkLabel(main_frame, text="", font=ctk.CTkFont(family="Inter", size=12), text_color="#FF3355")
-        self.error_label.pack(pady=(0, 10))
+        self.error_label.pack(pady=(0, 6))
 
         btn_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         btn_frame.pack(fill="x", padx=30, pady=(0, 20))
@@ -378,6 +410,13 @@ class PasswordModal(ctk.CTkToplevel):
         ctk.CTkButton(btn_frame, text="✅ Confirm", font=ctk.CTkFont(family="Inter", size=14, weight="bold"), fg_color="#00FFAA", text_color="#0A0B10", hover_color="#00CC88", height=40, command=self._confirm).grid(row=0, column=1, padx=(5, 0), sticky="ew")
 
         self.protocol("WM_DELETE_WINDOW", self._cancel)
+
+    def _toggle_show_password(self):
+        self._show_password = not self._show_password
+        show_char = "" if self._show_password else "*"
+        self.pass_entry.configure(show=show_char)
+        self.confirm_entry.configure(show=show_char)
+        self.show_btn.configure(text="🙈 Hide password" if self._show_password else "👁 Show password")
 
     def _confirm(self):
         p1 = self.pass_entry.get()
