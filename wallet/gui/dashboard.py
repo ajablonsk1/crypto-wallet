@@ -4,6 +4,8 @@ import customtkinter as ctk
 from typing import List, Tuple, Optional
 from decimal import Decimal
 import threading
+import json
+import os
 
 # Backend imports
 from wallet.crypto.keys import derive_private_key, private_key_to_address
@@ -72,9 +74,14 @@ class DashboardScreen(ctk.CTkFrame):
         self._build_content()
 
         if self.seed is not None:
-            # Generate first account (index 0) on startup
-            self._add_account_to_list(0)
-            # Set the first account as active
+            # read accounts
+            saved_account_count = self._load_settings()
+            
+            # generate all accounts
+            for i in range(saved_account_count):
+                self._add_account_to_list(i)
+                
+            # set first account as active
             self._switch_account(0, initial=True)
 
     # ================================================================
@@ -120,6 +127,26 @@ class DashboardScreen(ctk.CTkFrame):
         self._add_account_to_list(next_index)
         print(f"[Dashboard] Added Account #{next_index}")
         self._rebuild_accounts_list()
+        self._save_settings(len(self.accounts))
+        
+    def _load_settings(self) -> int:
+        """Wczytuje liczbę wygenerowanych kont z pliku."""
+        if os.path.exists("app_settings.json"):
+            try:
+                with open("app_settings.json", "r") as f:
+                    data = json.load(f)
+                    return data.get("account_count", 1)
+            except Exception as e:
+                print(f"[Dashboard] Error while reading: {e}")
+        return 1
+
+    def _save_settings(self, count: int):
+        """saves accounts to file"""
+        try:
+            with open("app_settings.json", "w") as f:
+                json.dump({"account_count": count}, f)
+        except Exception as e:
+            print(f"[Dashboard] Error while saving: {e}")
 
     # ================================================================
     #  DATA LOADING & UI UPDATES
