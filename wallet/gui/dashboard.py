@@ -11,7 +11,7 @@ import os
 from wallet.crypto.keys import derive_private_key, private_key_to_address
 from wallet.network.provider import get_eth_balance
 from wallet.network.history import get_transaction_history, EtherscanAPIError
-from wallet.network.tokens import get_tracked_tokens, get_token_balance, get_token_info
+from wallet.network.tokens import get_tracked_tokens, get_token_balance, get_token_info, add_custom_token
 
 
 class DashboardScreen(ctk.CTkFrame):
@@ -74,15 +74,44 @@ class DashboardScreen(ctk.CTkFrame):
         self._build_content()
 
         if self.seed is not None:
-            # read accounts
-            saved_account_count = self._load_settings()
+            # Load settings from file
+            settings = self._load_settings()
             
-            # generate all accounts
+            # Generate all saved accounts
+            saved_account_count = settings.get("account_count", 1)
             for i in range(saved_account_count):
                 self._add_account_to_list(i)
                 
-            # set first account as active
+            # Set the first account as active
             self._switch_account(0, initial=True)
+
+            # Load saved tokens in the background to avoid freezing the UI
+            saved_tokens = settings.get("tokens", [])
+            if saved_tokens:
+                threading.Thread(target=self._initialize_saved_tokens, args=(saved_tokens,), daemon=True).start()
+
+    # ================================================================
+    #  SETTINGS MANAGEMENT (PERSISTENCE)
+    # ================================================================
+    def _load_settings(self) -> dict:
+        """Loads user settings (accounts and tokens) from a local file."""
+        if os.path.exists("app_settings.json"):
+            try:
+                with open("app_settings.json", "r") as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"[Dashboard] Error while reading settings: {e}")
+        return {"account_count": 1, "tokens": []}
+
+    def _save_setting(self, key: str, value: any):
+        """Updates and saves a specific key in the settings file."""
+        settings = self._load_settings()
+        settings[key] = value
+        try:
+            with open("app_settings.json", "w") as f:
+                json.dump(settings, f)
+        except Exception as e:
+            print(f"[Dashboard] Error while saving settings: {e}")
 
     # ================================================================
     #  ACCOUNT MANAGEMENT
@@ -127,26 +156,53 @@ class DashboardScreen(ctk.CTkFrame):
         self._add_account_to_list(next_index)
         print(f"[Dashboard] Added Account #{next_index}")
         self._rebuild_accounts_list()
-        self._save_settings(len(self.accounts))
         
-    def _load_settings(self) -> int:
-        """Load accounts from file."""
-        if os.path.exists("app_settings.json"):
-            try:
-                with open("app_settings.json", "r") as f:
-                    data = json.load(f)
-                    return data.get("account_count", 1)
-            except Exception as e:
-                print(f"[Dashboard] Error while reading: {e}")
-        return 1
+        # Save updated account count to settings
+        self._save_setting("account_count", len(self.accounts))
 
-    def _save_settings(self, count: int):
-        """saves accounts to file"""
+    # ================================================================
+    #  TOKEN MANAGEMENT
+    # ================================================================
+    def _initialize_saved_tokens(self, tokens: List[str]):
+        """Loads saved token contracts into the backend."""
+        for token_addr in tokens:
+            try:
+                add_custom_token(token_addr)
+            except Exception as e:
+                print(f"[Dashboard] Failed to initialize token {token_addr}: {e}")
+        
+        # Refresh the UI with the newly loaded tokens
+        if self._active:
+            self._load_all_data()
+
+    def _on_add_token_click(self):
+        """Displays a dialog to input an ERC-20 contract address."""
+        dialog = ctk.CTkInputDialog(text="Enter ERC-20 Contract Address:", title="Add Custom Token")
+        contract_address = dialog.get_input()
+        
+        if contract_address and contract_address.strip():
+            addr = contract_address.strip()
+            # Run network call in background to prevent UI freeze
+            threading.Thread(target=self._add_token_background, args=(addr,), daemon=True).start()
+
+    def _add_token_background(self, contract_address: str):
+        """Handles fetching token info and saving it to settings in the background."""
         try:
-            with open("app_settings.json", "w") as f:
-                json.dump({"account_count": count}, f)
+            info = add_custom_token(contract_address)
+            print(f"[Dashboard] Successfully added token: {info.get('symbol')}")
+            
+            # Save the new token address to settings
+            settings = self._load_settings()
+            tokens = settings.get("tokens", [])
+            if contract_address not in tokens:
+                tokens.append(contract_address)
+                self._save_setting("tokens", tokens)
+                
+            # Refresh dashboard data to show the new token balance
+            if self._active:
+                self._load_all_data()
         except Exception as e:
-            print(f"[Dashboard] Error while saving: {e}")
+            print(f"[Dashboard] Error adding token: {e}")
 
     # ================================================================
     #  DATA LOADING & UI UPDATES
@@ -244,9 +300,14 @@ class DashboardScreen(ctk.CTkFrame):
         ).grid(row=4, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_TINY), sticky="ew")
 
         ctk.CTkButton(
+            sidebar, text="🪙 Add Token", fg_color=self.LINK_COLOR, hover_color="#0055CC",
+            command=self._on_add_token_click
+        ).grid(row=5, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_TINY), sticky="ew")
+
+        ctk.CTkButton(
             sidebar, text="🚪 Logout", fg_color=self.ACCENT_2, hover_color="#CC2266",
             command=self._on_logout
-        ).grid(row=5, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_LARGE), sticky="ew")
+        ).grid(row=6, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_LARGE), sticky="ew")
 
     def _rebuild_accounts_list(self):
         """Refreshes the sidebar account list."""
@@ -277,15 +338,18 @@ class DashboardScreen(ctk.CTkFrame):
             lbl_info.bind("<Button-1>", lambda e, idx=i: self._switch_account(idx))
 
     def _build_content(self):
-        """Builds the right content panel."""
-        content = ctk.CTkFrame(self, fg_color="transparent")
-        content.grid(row=0, column=1, sticky="nsew", padx=(self.PAD_TINY, self.PAD_SMALL), pady=self.PAD_SMALL)
-        content.grid_columnconfigure(0, weight=1)
-        content.grid_rowconfigure(2, weight=1)
+            """Builds the right content panel."""
+            content = ctk.CTkFrame(self, fg_color="transparent")
+            content.grid(row=0, column=1, sticky="nsew", padx=(self.PAD_TINY, self.PAD_SMALL), pady=self.PAD_SMALL)
+            content.grid_columnconfigure(0, weight=1)
+                
+            content.grid_rowconfigure(0, weight=0)
+            content.grid_rowconfigure(1, weight=1)
+            content.grid_rowconfigure(2, weight=1)
 
-        self._build_top_cards(content)
-        self._build_token_table(content)
-        self._build_transaction_history(content)
+            self._build_top_cards(content)
+            self._build_token_table(content)
+            self._build_transaction_history(content)
 
     def _build_top_cards(self, parent):
         top_frame = ctk.CTkFrame(parent, fg_color="transparent")
@@ -308,25 +372,49 @@ class DashboardScreen(ctk.CTkFrame):
         self.balance_label.pack(anchor="w", padx=20, pady=(0, 20))
 
     def _build_token_table(self, parent):
-        token_frame = ctk.CTkFrame(parent, fg_color=self.PANEL_COLOR, border_width=1, border_color=self.ACCENT_1)
-        token_frame.grid(row=1, column=0, sticky="ew", pady=(0, self.PAD_SMALL))
-        token_frame.grid_columnconfigure((0, 1, 2), weight=1)
-        for i, h in enumerate(["Symbol", "Name", "Balance"]):
-            ctk.CTkLabel(token_frame, text=h, text_color=self.ACCENT_2, font=("Inter", 14, "bold")).grid(row=0, column=i, padx=20, pady=10, sticky="w")
-        self._token_content_frame = ctk.CTkFrame(token_frame, fg_color="transparent")
-        self._token_content_frame.grid(row=1, column=0, columnspan=3, sticky="ew")
+            """Builds the token balance table with a scrollbar and complete border."""
+            self.token_table_frame = ctk.CTkFrame(
+                parent, fg_color=self.PANEL_COLOR, border_width=1, border_color=self.ACCENT_1,
+                corner_radius=self.CORNER_RADIUS
+            )
+            self.token_table_frame.grid(row=1, column=0, sticky="nsew", pady=(0, self.PAD_SMALL))
+            
+            self.token_table_frame.grid_columnconfigure((0, 1, 2), weight=1, uniform="token_cols")
+            self.token_table_frame.grid_rowconfigure(1, weight=1)
+
+            for i, h in enumerate(["Symbol", "Name", "Balance"]):
+                ctk.CTkLabel(
+                    self.token_table_frame, text=h, text_color=self.ACCENT_2, 
+                    font=ctk.CTkFont(family="Inter", size=14, weight="bold")
+                ).grid(row=0, column=i, padx=20, pady=10, sticky="w")
+                
+            self._token_content_frame = ctk.CTkScrollableFrame(
+                self.token_table_frame, fg_color="transparent", scrollbar_button_color=self.ACCENT_1
+            )
+            self._token_content_frame.grid(row=1, column=0, columnspan=3, sticky="nsew", padx=5, pady=(0, 10))
 
     def _rebuild_token_table(self):
-        for w in self._token_content_frame.winfo_children(): w.destroy()
-        if not self.tokens_data:
-            ctk.CTkLabel(self._token_content_frame, text="No tokens found", text_color=self.TEXT_SECONDARY).pack(pady=10)
-            return
-        for t in self.tokens_data:
-            row = ctk.CTkFrame(self._token_content_frame, fg_color="transparent")
-            row.pack(fill="x")
-            ctk.CTkLabel(row, text=t["symbol"], text_color=self.ACCENT_1, width=100).pack(side="left", padx=20)
-            ctk.CTkLabel(row, text=t["name"], width=200).pack(side="left", padx=20)
-            ctk.CTkLabel(row, text=t["balance"], width=100).pack(side="left", padx=20)
+            """Refreshes the token table data inside the scrollable container."""
+            for w in self._token_content_frame.winfo_children(): 
+                w.destroy()
+                
+            if not self.tokens_data:
+                ctk.CTkLabel(
+                    self._token_content_frame, text="No tokens found", 
+                    text_color=self.TEXT_SECONDARY, font=ctk.CTkFont(family="Inter", size=13)
+                ).pack(pady=20)
+                return
+                
+            for t in self.tokens_data:
+                row = ctk.CTkFrame(self._token_content_frame, fg_color="transparent")
+                row.pack(fill="x", pady=2)
+                
+                # Use the same column configuration as the header for pixel-perfect alignment
+                row.grid_columnconfigure((0, 1, 2), weight=1, uniform="token_cols")
+                
+                ctk.CTkLabel(row, text=t["symbol"], text_color=self.ACCENT_1, font=ctk.CTkFont(family="Inter", size=13, weight="bold"), anchor="w").grid(row=0, column=0, padx=20, sticky="ew")
+                ctk.CTkLabel(row, text=t["name"], text_color=self.TEXT_WHITE, font=ctk.CTkFont(family="Inter", size=13), anchor="w").grid(row=0, column=1, padx=20, sticky="ew")
+                ctk.CTkLabel(row, text=t["balance"], text_color=self.TEXT_WHITE, font=ctk.CTkFont(family="SF Mono", size=13), anchor="w").grid(row=0, column=2, padx=20, sticky="ew")
 
     def _build_transaction_history(self, parent):
         hist_frame = ctk.CTkFrame(parent, fg_color=self.PANEL_COLOR, border_width=1, border_color=self.ACCENT_2)
