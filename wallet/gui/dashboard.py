@@ -130,7 +130,7 @@ class DashboardScreen(ctk.CTkFrame):
         self._save_settings(len(self.accounts))
         
     def _load_settings(self) -> int:
-        """Wczytuje liczbę wygenerowanych kont z pliku."""
+        """Load accounts from file."""
         if os.path.exists("app_settings.json"):
             try:
                 with open("app_settings.json", "r") as f:
