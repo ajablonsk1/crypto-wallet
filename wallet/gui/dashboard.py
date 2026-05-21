@@ -419,18 +419,63 @@ class DashboardScreen(ctk.CTkFrame):
     def _build_transaction_history(self, parent):
         hist_frame = ctk.CTkFrame(parent, fg_color=self.PANEL_COLOR, border_width=1, border_color=self.ACCENT_2)
         hist_frame.grid(row=2, column=0, sticky="nsew")
+        hist_frame.grid_columnconfigure(0, weight=1)
         hist_frame.grid_rowconfigure(1, weight=1)
         ctk.CTkLabel(hist_frame, text="📜 History", text_color=self.ACCENT_2, font=("Inter", 18, "bold")).grid(row=0, column=0, padx=20, pady=10, sticky="w")
         self.history_scroll = ctk.CTkScrollableFrame(hist_frame, fg_color="transparent", scrollbar_button_color=self.ACCENT_2)
         self.history_scroll.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
 
     def _rebuild_transaction_history(self):
-        for w in self.history_scroll.winfo_children(): w.destroy()
+        for w in self.history_scroll.winfo_children(): 
+            w.destroy()
+            
         if not self.transactions_data:
-            ctk.CTkLabel(self.history_scroll, text="No history").pack()
+            ctk.CTkLabel(
+                self.history_scroll, text="No history found", 
+                text_color=self.TEXT_SECONDARY, font=ctk.CTkFont(family="Inter", size=14)
+            ).pack(pady=20)
             return
+            
         for tx in self.transactions_data:
-            ctk.CTkLabel(self.history_scroll, text=f"{tx['direction']} | {tx['value']} {tx['symbol']} | {tx['status']}").pack(fill="x", pady=2)
+            row = ctk.CTkFrame(self.history_scroll, fg_color="transparent")
+            row.pack(fill="x", pady=4, padx=5)
+            
+            # divide history for 2 identical parts
+            row.grid_columnconfigure((0, 1), weight=1, uniform="history_cols")
+            
+            # transaction column
+            dir_color = self.STATUS_GREEN if tx['direction'] == "IN" else self.STATUS_RED
+            info_text = f"{tx['direction']} | {tx['value']} {tx['symbol']} | {tx['status']}"
+            
+            ctk.CTkLabel(
+                row, text=info_text, font=ctk.CTkFont(family="Inter", size=13, weight="bold"),
+                text_color=dir_color, anchor="w"
+            ).grid(row=0, column=0, sticky="w")
+            
+            # hash column
+            full_hash = tx.get('hash', '')
+            short_hash = f"{full_hash[:6]}...{full_hash[-4:]}" if full_hash else ""
+            
+            hash_label = ctk.CTkLabel(
+                row, text=f"📄 {short_hash}", font=ctk.CTkFont(family="SF Mono", size=13),
+                text_color=self.LINK_COLOR, cursor="hand2", anchor="w"
+            )
+            hash_label.grid(row=0, column=1, sticky="w")
+            
+            hash_label.bind("<Button-1>", lambda e, h=full_hash, lbl=hash_label: self._copy_tx_hash(h, lbl))
+
+    def _copy_tx_hash(self, tx_hash: str, label: ctk.CTkLabel):
+        if not tx_hash: 
+            return
+            
+        self.clipboard_clear()
+        self.clipboard_append(tx_hash)
+        
+        original_text = label.cget("text")
+        
+        label.configure(text="📋 Copied!", text_color=self.STATUS_GREEN)
+        
+        self.after(1500, lambda: label.configure(text=original_text, text_color=self.LINK_COLOR) if self._active and label.winfo_exists() else None)
 
     # ================================================================
     #  HANDLERS

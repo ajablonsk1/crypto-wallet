@@ -16,6 +16,7 @@ from wallet.network.tx import (
     estimate_fee,
     build_token_tx,
     estimate_token_fee,
+    wait_for_receipt
 )
 
 
@@ -395,7 +396,8 @@ class SendScreen(ctk.CTkFrame):
             self.error_label.configure(text=f"Insufficient {token} balance")
             return
 
-        self.error_label.configure(text="")
+        self.error_label.configure(text="", cursor="")
+        self.error_label.unbind("<Button-1>")
 
         self._sending = True
         self.send_button.configure(state="disabled", text="⏳ Estimating...")
@@ -469,18 +471,33 @@ class SendScreen(ctk.CTkFrame):
             # sign and send
             tx_hash = sign_and_send(tx, self.private_key)
 
+            # wait for transaction confirmation
+            wait_for_receipt(tx_hash)
+            time.sleep(2)
+
             # success
             self.after(0, lambda: self._on_send_success(tx_hash))
 
         except Exception as e:
-            print(f"[Send] Transaction error: {e}")
-            self.after(0, lambda: self._on_send_error(str(e)))
+                    error_msg = str(e)
+                    print(f"[Send] Transaction error: {error_msg}")
+                    self.after(0, lambda msg=error_msg: self._on_send_error(msg))
 
     def _on_send_success(self, tx_hash: str):
         # update ui after successful transaction
         if not self._active:
             return
-        self.error_label.configure(text=f"✅ Transaction sent! Hash: {tx_hash[:10]}...", text_color=self.SUCCESS_COLOR)
+            
+        success_msg = f"✅ Transaction sent! Hash: {tx_hash[:10]}...\n(Click to copy full hash)"
+        self.error_label.configure(
+            text=success_msg, 
+            text_color=self.SUCCESS_COLOR, 
+            cursor="hand2"  # hand cursor
+        )
+        
+        # copy hash
+        self.error_label.bind("<Button-1>", lambda event: self._copy_hash(tx_hash))
+
         self._reset_send_button()
         # clear fields
         self.recipient_entry.delete(0, "end")
@@ -488,10 +505,21 @@ class SendScreen(ctk.CTkFrame):
         # balance refresh in background
         threading.Thread(target=self._load_tokens_and_balance, daemon=True).start()
 
+    def _copy_hash(self, tx_hash: str):
+        self.clipboard_clear()
+        self.clipboard_append(tx_hash)
+        
+        self.error_label.configure(text="📋 Full hash copied to clipboard!")
+        
+        msg = f"✅ Transaction sent! Hash: {tx_hash[:10]}...\n(Click to copy full hash)"
+        self.after(2000, lambda: self.error_label.configure(text=msg) if self._active else None)
+
+
     def _on_send_error(self, error_msg: str):
         if not self._active:
             return
-        self.error_label.configure(text=f"❌ {error_msg}", text_color=self.ERROR_COLOR)
+        self.error_label.configure(text=f"❌ {error_msg}", text_color=self.ERROR_COLOR, cursor="")
+        self.error_label.unbind("<Button-1>")
         self._reset_send_button()
 
     # ================================================================
