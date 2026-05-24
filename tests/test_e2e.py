@@ -107,7 +107,7 @@ class TestWalletE2E:
         assert self.tx_hash.startswith("0x")
         
         # Wait for the transaction to be included in a block
-        receipt = wait_for_receipt(self.tx_hash, timeout=120)
+        receipt = wait_for_receipt(self.tx_hash)
         assert receipt["status"] == 1 
 
         # Polling: RPC nodes may take a few seconds to reflect the new balance after confirmation

@@ -80,8 +80,12 @@ def estimate_fee(to_address: str, amount_eth: Decimal) -> Decimal:
     fee_wei = gas_limit * w3.eth.gas_price
     return Decimal(w3.from_wei(fee_wei, 'ether'))
 
-def wait_for_receipt(tx_hash: str, timeout: int = 120):
+def wait_for_receipt(tx_hash: str, timeout: Optional[int] = None):
     w3 = get_provider()
+
+    if timeout is None:
+        timeout = int(os.getenv("TX_TIMEOUT", "120"))
+        
     try:
         return w3.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout)
     except TimeExhausted:

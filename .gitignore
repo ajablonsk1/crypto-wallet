@@ -6,3 +6,4 @@ __pycache__/
 .pytest_cache/
 portfel_taski.md
 wallet.json
+app_settings.json
