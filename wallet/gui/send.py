@@ -16,12 +16,11 @@ from wallet.network.tx import (
     estimate_fee,
     build_token_tx,
     estimate_token_fee,
-    wait_for_receipt
+    wait_for_receipt,
 )
 
 
 class SendScreen(ctk.CTkFrame):
-
     # ── color palette ──────────────────────────────────────────────
     BG_COLOR = "#0A0B10"
     PANEL_COLOR = "#15161E"
@@ -41,7 +40,9 @@ class SendScreen(ctk.CTkFrame):
     CORNER_RADIUS = 15
     ENTRY_HEIGHT = 45
 
-    def __init__(self, master, seed: Optional[bytes] = None, account_index: int = 0, **kwargs):
+    def __init__(
+        self, master, seed: Optional[bytes] = None, account_index: int = 0, **kwargs
+    ):
         super().__init__(master, **kwargs)
         self.seed = seed
         self.account_index = account_index
@@ -105,17 +106,17 @@ class SendScreen(ctk.CTkFrame):
                 try:
                     bal = get_token_balance(self.address, contract)
                     symbol = contract[:4].upper()  # placeholder
-                    token_tmp.append({
-                        "symbol": symbol,
-                        "contract": contract,
-                        "balance": bal
-                    })
+                    token_tmp.append(
+                        {"symbol": symbol, "contract": contract, "balance": bal}
+                    )
                     self.token_balances[symbol] = bal
                 except Exception as e:
                     print(f"[Send] Token load error {contract}: {e}")
 
             # set ETH as first
-            self.tokens = [{"symbol": "ETH", "contract": None, "balance": self.eth_balance}] + token_tmp
+            self.tokens = [
+                {"symbol": "ETH", "contract": None, "balance": self.eth_balance}
+            ] + token_tmp
 
             # update UI in main thread
             if self._active:
@@ -146,7 +147,13 @@ class SendScreen(ctk.CTkFrame):
 
         # ── Header + back button ──────────────────────────
         header_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
-        header_frame.grid(row=0, column=0, padx=self.PAD_SMALL, pady=(self.PAD_LARGE, self.PAD_SMALL), sticky="ew")
+        header_frame.grid(
+            row=0,
+            column=0,
+            padx=self.PAD_SMALL,
+            pady=(self.PAD_LARGE, self.PAD_SMALL),
+            sticky="ew",
+        )
         header_frame.grid_columnconfigure(0, weight=1)
         header_frame.grid_columnconfigure(1, weight=0)
 
@@ -154,7 +161,7 @@ class SendScreen(ctk.CTkFrame):
             header_frame,
             text="✈️ Send Crypto",
             font=ctk.CTkFont(family="Inter", size=28, weight="bold"),
-            text_color=self.ACCENT_1
+            text_color=self.ACCENT_1,
         ).grid(row=0, column=0, sticky="w")
 
         back_btn = ctk.CTkButton(
@@ -165,7 +172,7 @@ class SendScreen(ctk.CTkFrame):
             text_color=self.TEXT_WHITE,
             hover_color="#0055CC",
             corner_radius=8,
-            command=self._on_back_click
+            command=self._on_back_click,
         )
         back_btn.grid(row=0, column=1, sticky="e", padx=(10, 0))
 
@@ -175,7 +182,7 @@ class SendScreen(ctk.CTkFrame):
             text="Recipient Address",
             font=ctk.CTkFont(family="Inter", size=14),
             text_color=self.TEXT_WHITE,
-            anchor="w"
+            anchor="w",
         ).grid(row=1, column=0, padx=self.PAD_SMALL, pady=(0, 4), sticky="w")
 
         self.recipient_entry = ctk.CTkEntry(
@@ -186,13 +193,20 @@ class SendScreen(ctk.CTkFrame):
             border_color=self.LINK_COLOR,
             text_color=self.TEXT_WHITE,
             placeholder_text_color=self.TEXT_SECONDARY,
-            height=self.ENTRY_HEIGHT
+            height=self.ENTRY_HEIGHT,
         )
-        self.recipient_entry.grid(row=2, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_SMALL), sticky="ew")
+        self.recipient_entry.grid(
+            row=2, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_SMALL), sticky="ew"
+        )
+        # Re-estimate gas whenever the recipient changes - the actual address
+        # affects the gas estimate (e.g. sending to a contract costs more).
+        self.recipient_entry.bind("<KeyRelease>", lambda e: self._schedule_gas_update())
 
         # ── Amount + Token Selector ────────────────────────────────
         amount_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
-        amount_frame.grid(row=3, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_TINY), sticky="ew")
+        amount_frame.grid(
+            row=3, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_TINY), sticky="ew"
+        )
         amount_frame.grid_columnconfigure(0, weight=3)
         amount_frame.grid_columnconfigure(1, weight=1)
 
@@ -201,7 +215,7 @@ class SendScreen(ctk.CTkFrame):
             text="Amount",
             font=ctk.CTkFont(family="Inter", size=14),
             text_color=self.TEXT_WHITE,
-            anchor="w"
+            anchor="w",
         ).grid(row=0, column=0, padx=0, pady=(0, 4), sticky="w")
 
         self.amount_entry = ctk.CTkEntry(
@@ -212,7 +226,7 @@ class SendScreen(ctk.CTkFrame):
             border_color=self.LINK_COLOR,
             text_color=self.TEXT_WHITE,
             placeholder_text_color=self.TEXT_SECONDARY,
-            height=self.ENTRY_HEIGHT
+            height=self.ENTRY_HEIGHT,
         )
         self.amount_entry.grid(row=1, column=0, padx=(0, 8), sticky="ew")
         self.amount_entry.bind("<KeyRelease>", lambda e: self._schedule_gas_update())
@@ -230,14 +244,16 @@ class SendScreen(ctk.CTkFrame):
             dropdown_hover_color=self.ACCENT_2,
             corner_radius=8,
             height=self.ENTRY_HEIGHT,
-            command=self._on_token_change
+            command=self._on_token_change,
         )
         self.token_menu.set("ETH")
         self.token_menu.grid(row=1, column=1, sticky="ew")
 
         # ── Quick percentage buttons ──────────────────────────────
         quick_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
-        quick_frame.grid(row=4, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_SMALL), sticky="ew")
+        quick_frame.grid(
+            row=4, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_SMALL), sticky="ew"
+        )
         quick_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         percentages = [("25%", 0.25), ("50%", 0.50), ("75%", 0.75), ("Max", 1.0)]
@@ -251,26 +267,28 @@ class SendScreen(ctk.CTkFrame):
                 hover_color="#0055CC",
                 corner_radius=8,
                 height=30,
-                command=lambda v=value: self._quick_percent(v)
+                command=lambda v=value: self._quick_percent(v),
             )
             btn.grid(row=0, column=i, padx=2, sticky="ew")
 
         # ── Gas Fee ────────────────────────────────────────────────
         gas_frame = ctk.CTkFrame(form_frame, fg_color=self.BG_COLOR, corner_radius=8)
-        gas_frame.grid(row=5, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_SMALL), sticky="ew")
+        gas_frame.grid(
+            row=5, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_SMALL), sticky="ew"
+        )
 
         ctk.CTkLabel(
             gas_frame,
             text="⛽ Estimated Gas Fee",
             font=ctk.CTkFont(family="Inter", size=13, weight="bold"),
-            text_color=self.GAS_COLOR
+            text_color=self.GAS_COLOR,
         ).pack(side="left", padx=12, pady=8)
 
         self.gas_label = ctk.CTkLabel(
             gas_frame,
             text="Calculating...",
             font=ctk.CTkFont(family="Inter", size=13),
-            text_color=self.TEXT_WHITE
+            text_color=self.TEXT_WHITE,
         )
         self.gas_label.pack(side="right", padx=12, pady=8)
 
@@ -280,9 +298,11 @@ class SendScreen(ctk.CTkFrame):
             text="",
             font=ctk.CTkFont(family="Inter", size=12),
             text_color=self.ERROR_COLOR,
-            anchor="w"
+            anchor="w",
         )
-        self.error_label.grid(row=6, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_TINY), sticky="ew")
+        self.error_label.grid(
+            row=6, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_TINY), sticky="ew"
+        )
 
         # ── Send Button ────────────────────────────────────────────
         self.send_button = ctk.CTkButton(
@@ -294,15 +314,17 @@ class SendScreen(ctk.CTkFrame):
             hover_color="#CC2266",
             corner_radius=10,
             height=50,
-            command=self._on_send_click
+            command=self._on_send_click,
         )
-        self.send_button.grid(row=7, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_LARGE), sticky="ew")
+        self.send_button.grid(
+            row=7, column=0, padx=self.PAD_SMALL, pady=(0, self.PAD_LARGE), sticky="ew"
+        )
 
     # ================================================================
     #  dynamic updates
     # ================================================================
     def _schedule_gas_update(self):
-        if hasattr(self, '_gas_timer') and self._gas_timer:
+        if hasattr(self, "_gas_timer") and self._gas_timer:
             self.after_cancel(self._gas_timer)
         self._gas_timer = self.after(500, self._update_gas_fee)
 
@@ -320,28 +342,36 @@ class SendScreen(ctk.CTkFrame):
             return
 
         # run estimation in background
-        threading.Thread(target=self._estimate_gas_background, args=(token, amount), daemon=True).start()
+        threading.Thread(
+            target=self._estimate_gas_background, args=(token, amount), daemon=True
+        ).start()
 
     def _estimate_gas_background(self, token: str, amount: Decimal):
         # estimate gas fee in background
         try:
+            recipient = self.recipient_entry.get().strip()
+            if not recipient:
+                recipient = self.address
+
             if token == "ETH":
-                fee = estimate_fee(self.address, amount)  # zakładamy, że zwraca Decimal w ETH
+                fee = estimate_fee(recipient, amount)
             else:
-                # find contract for 20 ERC-20 tokens 
                 contract = None
                 for t in self.tokens:
                     if t["symbol"] == token:
                         contract = t.get("contract")
                         break
                 if not contract:
-                    self.after(0, lambda: self.gas_label.configure(text="Token not supported"))
+                    self.after(
+                        0, lambda: self.gas_label.configure(text="Token not supported")
+                    )
                     return
-                fee = estimate_token_fee(self.address, contract, amount)
+                fee = estimate_token_fee(
+                    contract, recipient, amount, from_address=self.address
+                )
 
             self.gas_fee_eth = fee
             fee_str = f"{fee:.6f} ETH"
-            # might add USB but for now work with ETH
             self.after(0, lambda: self._update_gas_label(fee_str))
         except Exception as e:
             print(f"[Gas] Estimation error: {e}")
@@ -362,8 +392,9 @@ class SendScreen(ctk.CTkFrame):
         balance = self.token_balances.get(token, Decimal("0"))
         amount = balance * Decimal(str(fraction))
         self.amount_entry.delete(0, "end")
-        formatted = f"{amount:.6f}".rstrip('0').rstrip('.')
-        if formatted == "": formatted = "0"
+        formatted = f"{amount:.6f}".rstrip("0").rstrip(".")
+        if formatted == "":
+            formatted = "0"
         self.amount_entry.insert(0, formatted)
         # refresh gas
         self._schedule_gas_update()
@@ -401,13 +432,17 @@ class SendScreen(ctk.CTkFrame):
 
         self._sending = True
         self.send_button.configure(state="disabled", text="⏳ Estimating...")
-        threading.Thread(target=self._prepare_and_show_modal, args=(recipient, amount, token), daemon=True).start()
+        threading.Thread(
+            target=self._prepare_and_show_modal,
+            args=(recipient, amount, token),
+            daemon=True,
+        ).start()
 
     def _prepare_and_show_modal(self, recipient: str, amount: Decimal, token: str):
         # gas estimation and show modal
         try:
             if token == "ETH":
-                fee = estimate_fee(self.address, amount)
+                fee = estimate_fee(recipient, amount)
             else:
                 contract = None
                 for t in self.tokens:
@@ -416,22 +451,29 @@ class SendScreen(ctk.CTkFrame):
                         break
                 if not contract:
                     raise ValueError("Token contract not found")
-                fee = estimate_token_fee(self.address, contract, amount)
+                fee = estimate_token_fee(
+                    contract, recipient, amount, from_address=self.address
+                )
 
             self.gas_fee_eth = fee
 
-            self.after(0, lambda: self._show_confirmation_modal(recipient, amount, token, fee))
+            self.after(
+                0, lambda: self._show_confirmation_modal(recipient, amount, token, fee)
+            )
 
         except Exception as e:
             print(f"[Send] Estimation error: {e}")
-            self.after(0, lambda: self._reset_send_button())
-            self.after(0, lambda: self.error_label.configure(text=f"Estimation failed: {str(e)[:50]}"))
+            err_msg = f"Estimation failed: {str(e)[:50]}"
+            self.after(0, self._reset_send_button)
+            self.after(0, lambda msg=err_msg: self.error_label.configure(text=msg))
 
     def _reset_send_button(self):
         self._sending = False
         self.send_button.configure(state="normal", text="🚀 Send")
 
-    def _show_confirmation_modal(self, recipient: str, amount: Decimal, token: str, gas_fee: Decimal):
+    def _show_confirmation_modal(
+        self, recipient: str, amount: Decimal, token: str, gas_fee: Decimal
+    ):
         master_window = self.winfo_toplevel()
         total_str = f"{amount} {token} + {gas_fee:.6f} ETH"
 
@@ -442,19 +484,29 @@ class SendScreen(ctk.CTkFrame):
             token=token,
             gas_fee=f"{gas_fee:.6f} ETH",
             total=total_str,
-            on_confirm=lambda: self._send_transaction(recipient, amount, token, gas_fee),
-            on_cancel=self._reset_send_button
+            on_confirm=lambda: self._send_transaction(
+                recipient, amount, token, gas_fee
+            ),
+            on_cancel=self._reset_send_button,
         )
         modal.grab_set()  # modalne
 
-    def _send_transaction(self, recipient: str, amount: Decimal, token: str, gas_fee: Decimal):
+    def _send_transaction(
+        self, recipient: str, amount: Decimal, token: str, gas_fee: Decimal
+    ):
         # block UI
         self.send_button.configure(state="disabled", text="⏳ Sending...")
         self._sending = True
 
-        threading.Thread(target=self._send_background, args=(recipient, amount, token, gas_fee), daemon=True).start()
+        threading.Thread(
+            target=self._send_background,
+            args=(recipient, amount, token, gas_fee),
+            daemon=True,
+        ).start()
 
-    def _send_background(self, recipient: str, amount: Decimal, token: str, gas_fee: Decimal):
+    def _send_background(
+        self, recipient: str, amount: Decimal, token: str, gas_fee: Decimal
+    ):
         try:
             if token == "ETH":
                 tx = build_eth_tx(self.address, recipient, amount)
@@ -479,22 +531,24 @@ class SendScreen(ctk.CTkFrame):
             self.after(0, lambda: self._on_send_success(tx_hash))
 
         except Exception as e:
-                    error_msg = str(e)
-                    print(f"[Send] Transaction error: {error_msg}")
-                    self.after(0, lambda msg=error_msg: self._on_send_error(msg))
+            error_msg = str(e)
+            print(f"[Send] Transaction error: {error_msg}")
+            self.after(0, lambda msg=error_msg: self._on_send_error(msg))
 
     def _on_send_success(self, tx_hash: str):
         # update ui after successful transaction
         if not self._active:
             return
-            
-        success_msg = f"✅ Transaction sent! Hash: {tx_hash[:10]}...\n(Click to copy full hash)"
-        self.error_label.configure(
-            text=success_msg, 
-            text_color=self.SUCCESS_COLOR, 
-            cursor="hand2"  # hand cursor
+
+        success_msg = (
+            f"✅ Transaction sent! Hash: {tx_hash[:10]}...\n(Click to copy full hash)"
         )
-        
+        self.error_label.configure(
+            text=success_msg,
+            text_color=self.SUCCESS_COLOR,
+            cursor="hand2",  # hand cursor
+        )
+
         # copy hash
         self.error_label.bind("<Button-1>", lambda event: self._copy_hash(tx_hash))
 
@@ -508,17 +562,20 @@ class SendScreen(ctk.CTkFrame):
     def _copy_hash(self, tx_hash: str):
         self.clipboard_clear()
         self.clipboard_append(tx_hash)
-        
-        self.error_label.configure(text="📋 Full hash copied to clipboard!")
-        
-        msg = f"✅ Transaction sent! Hash: {tx_hash[:10]}...\n(Click to copy full hash)"
-        self.after(2000, lambda: self.error_label.configure(text=msg) if self._active else None)
 
+        self.error_label.configure(text="📋 Full hash copied to clipboard!")
+
+        msg = f"✅ Transaction sent! Hash: {tx_hash[:10]}...\n(Click to copy full hash)"
+        self.after(
+            2000, lambda: self.error_label.configure(text=msg) if self._active else None
+        )
 
     def _on_send_error(self, error_msg: str):
         if not self._active:
             return
-        self.error_label.configure(text=f"❌ {error_msg}", text_color=self.ERROR_COLOR, cursor="")
+        self.error_label.configure(
+            text=f"❌ {error_msg}", text_color=self.ERROR_COLOR, cursor=""
+        )
         self.error_label.unbind("<Button-1>")
         self._reset_send_button()
 
@@ -535,10 +592,18 @@ class SendScreen(ctk.CTkFrame):
 
 
 class ConfirmationModal(ctk.CTkToplevel):
-    def __init__(self, master, recipient: str, amount: str, token: str,
-                 gas_fee: str, total: str,
-                 on_confirm: Optional[Callable] = None,
-                 on_cancel: Optional[Callable] = None, **kwargs):
+    def __init__(
+        self,
+        master,
+        recipient: str,
+        amount: str,
+        token: str,
+        gas_fee: str,
+        total: str,
+        on_confirm: Optional[Callable] = None,
+        on_cancel: Optional[Callable] = None,
+        **kwargs,
+    ):
         super().__init__(master, **kwargs)
         self.on_confirm = on_confirm
         self.on_cancel = on_cancel
@@ -559,7 +624,7 @@ class ConfirmationModal(ctk.CTkToplevel):
             fg_color="#15161E",
             corner_radius=15,
             border_width=1,
-            border_color="#00FFAA"
+            border_color="#00FFAA",
         )
         main_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
@@ -568,7 +633,7 @@ class ConfirmationModal(ctk.CTkToplevel):
             main_frame,
             text="🔐 Confirm Transaction",
             font=ctk.CTkFont(family="Inter", size=22, weight="bold"),
-            text_color="#00FFAA"
+            text_color="#00FFAA",
         ).pack(pady=(20, 10))
 
         # details
@@ -583,17 +648,19 @@ class ConfirmationModal(ctk.CTkToplevel):
                 text=label,
                 font=ctk.CTkFont(family="Inter", size=14),
                 text_color="#999999",
-                anchor="w"
+                anchor="w",
             ).pack(side="left")
             ctk.CTkLabel(
                 row,
                 text=value,
                 font=ctk.CTkFont(family="Inter", size=14, weight="bold"),
                 text_color=value_color,
-                anchor="e"
+                anchor="e",
             ).pack(side="right")
 
-        short_rec = f"{recipient[:10]}...{recipient[-4:]}" if len(recipient) > 14 else recipient
+        short_rec = (
+            f"{recipient[:10]}...{recipient[-4:]}" if len(recipient) > 14 else recipient
+        )
         add_detail("To:", short_rec)
         add_detail("Amount:", amount, value_color="#00FFAA")
         add_detail("Gas Fee:", gas_fee, value_color="#FFAA00")
@@ -601,7 +668,6 @@ class ConfirmationModal(ctk.CTkToplevel):
 
         self.update_idletasks()
 
-        
         # buttons
         btn_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         btn_frame.pack(fill="x", padx=30, pady=(20, 20))
@@ -617,7 +683,7 @@ class ConfirmationModal(ctk.CTkToplevel):
             hover_color="#CC2266",
             corner_radius=10,
             height=40,
-            command=self._cancel
+            command=self._cancel,
         )
         self.cancel_btn.grid(row=0, column=0, padx=(0, 5), sticky="ew")
 
@@ -630,7 +696,7 @@ class ConfirmationModal(ctk.CTkToplevel):
             hover_color="#00CC88",
             corner_radius=10,
             height=40,
-            command=self._confirm
+            command=self._confirm,
         )
         self.confirm_btn.grid(row=0, column=1, padx=(5, 0), sticky="ew")
 
@@ -643,7 +709,7 @@ class ConfirmationModal(ctk.CTkToplevel):
         self._action_taken = True
         self.confirm_btn.configure(state="disabled", text="⏳ Processing...")
         self.cancel_btn.configure(state="disabled")
-        
+
         if self.on_confirm:
             self.on_confirm()
         self.destroy()
@@ -652,7 +718,7 @@ class ConfirmationModal(ctk.CTkToplevel):
         if self._action_taken:
             return
         self._action_taken = True
-        
+
         if self.on_cancel:
             self.on_cancel()
         self.destroy()

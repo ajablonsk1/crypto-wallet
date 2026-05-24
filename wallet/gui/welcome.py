@@ -1,5 +1,7 @@
 # wallet/gui/welcome.py
 
+import os
+
 import customtkinter as ctk
 from wallet.crypto.mnemonic import generate_mnemonic, validate_mnemonic, mnemonic_to_seed
 from wallet.crypto.keystore import create_keystore, load_keystore, InvalidPasswordError
@@ -63,9 +65,12 @@ class WelcomeScreen(ctk.CTkFrame):
         )
         self.left_frame.grid_rowconfigure(0, weight=0)  # title
         self.left_frame.grid_rowconfigure(1, weight=0)  # entry
-        self.left_frame.grid_rowconfigure(2, weight=0)  # button
+        self.left_frame.grid_rowconfigure(2, weight=0)  # unlock button
         self.left_frame.grid_rowconfigure(3, weight=0)  # show/hide toggle
-        self.left_frame.grid_rowconfigure(4, weight=1)  # spacer (error label)
+        self.left_frame.grid_rowconfigure(4, weight=0)  # error label
+        self.left_frame.grid_rowconfigure(5, weight=1)  # spacer
+        self.left_frame.grid_rowconfigure(6, weight=0)  # separator
+        self.left_frame.grid_rowconfigure(7, weight=0)  # import button
         self.left_frame.grid_columnconfigure(0, weight=1)
 
         # title
@@ -128,8 +133,25 @@ class WelcomeScreen(ctk.CTkFrame):
             text_color="#FF3355",
             anchor="w"
         )
-        self.unlock_error_label.grid(row=4, column=0, padx=self.PAD_LARGE, pady=(0, self.PAD_LARGE), sticky="w")
+        self.unlock_error_label.grid(row=4, column=0, padx=self.PAD_LARGE, pady=(0, 4), sticky="w")
         self.unlock_error_label.grid_remove()  # hide on start
+
+        # ── separator + import button ─────────────────────────────────
+        separator = ctk.CTkFrame(self.left_frame, height=1, fg_color="#2A2B36")
+        separator.grid(row=6, column=0, padx=self.PAD_LARGE, pady=(self.PAD_SMALL, self.PAD_TINY), sticky="ew")
+
+        # subtle "import existing wallet" button - styled as a link so it
+        # doesn't compete visually with the primary "Unlock" button
+        ctk.CTkButton(
+            self.left_frame,
+            text="📥 Import existing wallet (from mnemonic)",
+            font=ctk.CTkFont(family="Inter", size=13),
+            fg_color="transparent",
+            text_color=self.LINK_COLOR,
+            hover_color=self.BG_COLOR,
+            height=32,
+            command=self._on_import_click,
+        ).grid(row=7, column=0, padx=self.PAD_LARGE, pady=(0, self.PAD_LARGE), sticky="ew")
 
     # ================================================================
     # Create New Wallet
@@ -295,6 +317,41 @@ class WelcomeScreen(ctk.CTkFrame):
         if self.on_unlock_success:
             self.on_unlock_success(self.seed)
 
+    def _on_import_click(self):
+        """Open the import-mnemonic modal and, on success, create a fresh
+        keystore from the supplied recovery phrase + new password.
+
+        This overwrites any existing wallet.json on disk - we ask the user
+        to confirm inside the modal before that happens.
+        """
+        # Warn if an existing wallet would be overwritten. The modal also
+        # has its own confirmation, but we want to surface this immediately.
+        existing_keystore = os.path.exists("wallet.json")
+
+        dialog = ImportMnemonicModal(self.winfo_toplevel(), warn_overwrite=existing_keystore)
+        self.wait_window(dialog)
+
+        result = dialog.get_result()
+        if result is None:
+            return  # user cancelled
+
+        words, password = result
+
+        try:
+            seed = mnemonic_to_seed(words, passphrase="")
+            create_keystore(seed, password, "wallet.json")
+        except Exception as e:
+            self._show_unlock_error(f"Import failed: {str(e)}")
+            return
+
+        self.seed = seed
+        print("[Import] Wallet imported successfully from mnemonic.")
+        if self.on_create_wallet_success:
+            # Reuse the same downstream callback as Create Wallet - the
+            # dashboard doesn't need to know whether the seed came from a
+            # fresh generation or a recovery import.
+            self.on_create_wallet_success(self.seed)
+
     def _toggle_unlock_password(self):
         self._unlock_show_password = not self._unlock_show_password
         self.password_entry.configure(show="" if self._unlock_show_password else "*")
@@ -436,6 +493,238 @@ class PasswordModal(ctk.CTkToplevel):
 
     def get_password(self):
         return self._password
+
+
+class ImportMnemonicModal(ctk.CTkToplevel):
+    """Modal for importing a wallet from a BIP-39 mnemonic phrase.
+
+    Asks for:
+      - 12 words (one entry per word)
+      - new password (twice, with confirmation)
+
+    On confirm, validates the mnemonic via Bip39MnemonicValidator (the same
+    one used during Create Wallet) and returns (words, password) to the caller.
+    The caller is responsible for actually creating the keystore - we just
+    collect input.
+
+    A warning is shown when warn_overwrite=True so the user knows their
+    current wallet.json will be replaced.
+    """
+
+    BG = "#0A0B10"
+    PANEL = "#15161E"
+    ACCENT = "#00FFAA"
+    DANGER = "#FF3355"
+    TEXT_SECONDARY = "#999999"
+    PLACEHOLDER = "#666666"
+
+    def __init__(self, master, warn_overwrite: bool = False, **kwargs):
+        super().__init__(master, **kwargs)
+        self._words = None
+        self._password = None
+
+        self.title("Import Wallet from Mnemonic")
+        self.geometry("560x640")
+        self.resizable(False, False)
+        self.configure(fg_color=self.BG)
+        self.transient(master)
+
+        self.wait_visibility()
+        self.grab_set()
+
+        main = ctk.CTkFrame(self, fg_color=self.PANEL, corner_radius=15, border_width=1, border_color=self.ACCENT)
+        main.pack(fill="both", expand=True, padx=20, pady=20)
+
+        ctk.CTkLabel(
+            main, text="📥 Import Wallet",
+            font=ctk.CTkFont(family="Inter", size=22, weight="bold"),
+            text_color=self.ACCENT,
+        ).pack(pady=(20, 4))
+
+        ctk.CTkLabel(
+            main, text="Enter your 12-word recovery phrase",
+            font=ctk.CTkFont(family="Inter", size=12),
+            text_color=self.TEXT_SECONDARY,
+        ).pack(pady=(0, 10))
+
+        # ── 12-word grid ──────────────────────────────────────────────
+        grid_frame = ctk.CTkFrame(main, fg_color="transparent")
+        grid_frame.pack(padx=20, pady=(0, 10))
+
+        self.word_entries = []
+        for row in range(3):
+            for col in range(4):
+                idx = row * 4 + col
+
+                cell = ctk.CTkFrame(grid_frame, fg_color="transparent")
+                cell.grid(row=row, column=col, padx=4, pady=4)
+
+                ctk.CTkLabel(
+                    cell, text=str(idx + 1),
+                    font=ctk.CTkFont(family="Inter", size=10),
+                    text_color=self.PLACEHOLDER, width=18,
+                ).pack(side="left", padx=(0, 4))
+
+                entry = ctk.CTkEntry(
+                    cell, width=90, height=30,
+                    font=ctk.CTkFont(family="Inter", size=12),
+                    fg_color=self.BG, border_color="#005533",
+                    text_color="#FFFFFF",
+                )
+                entry.pack(side="left")
+                self.word_entries.append(entry)
+
+        # ── paste-all helper ──────────────────────────────────────────
+        # Recovery phrases are usually stored as a single line - typing
+        # them word-by-word is tedious and error-prone. This button lets
+        # the user paste the whole phrase at once and we split it for them.
+        ctk.CTkButton(
+            main, text="📋 Paste full phrase",
+            font=ctk.CTkFont(family="Inter", size=12),
+            fg_color="transparent", text_color="#0077FF",
+            hover_color=self.BG, height=24,
+            command=self._paste_phrase,
+        ).pack(pady=(0, 10))
+
+        # ── password fields ───────────────────────────────────────────
+        ctk.CTkLabel(
+            main, text="Set a password for this imported wallet",
+            font=ctk.CTkFont(family="Inter", size=12),
+            text_color=self.TEXT_SECONDARY,
+        ).pack(pady=(4, 6))
+
+        self.pass_entry = ctk.CTkEntry(
+            main, placeholder_text="Password", show="*",
+            font=ctk.CTkFont(family="Inter", size=14),
+            fg_color=self.BG, border_color=self.ACCENT,
+            text_color="#FFFFFF", height=36,
+        )
+        self.pass_entry.pack(fill="x", padx=30, pady=(0, 4))
+
+        self.confirm_entry = ctk.CTkEntry(
+            main, placeholder_text="Confirm password", show="*",
+            font=ctk.CTkFont(family="Inter", size=14),
+            fg_color=self.BG, border_color=self.ACCENT,
+            text_color="#FFFFFF", height=36,
+        )
+        self.confirm_entry.pack(fill="x", padx=30, pady=(0, 4))
+
+        self._show_password = False
+        self.show_btn = ctk.CTkButton(
+            main, text="👁 Show password",
+            font=ctk.CTkFont(family="Inter", size=11),
+            fg_color="transparent", text_color=self.PLACEHOLDER,
+            hover_color=self.BG, height=22,
+            command=self._toggle_show_password,
+        )
+        self.show_btn.pack(anchor="w", padx=26, pady=(0, 4))
+
+        # ── overwrite warning (only when wallet.json already exists) ──
+        if warn_overwrite:
+            ctk.CTkLabel(
+                main,
+                text="⚠ This will replace your existing wallet.json",
+                font=ctk.CTkFont(family="Inter", size=11, weight="bold"),
+                text_color=self.DANGER,
+            ).pack(pady=(4, 0))
+
+        # ── error label ───────────────────────────────────────────────
+        self.error_label = ctk.CTkLabel(
+            main, text="",
+            font=ctk.CTkFont(family="Inter", size=12),
+            text_color=self.DANGER,
+        )
+        self.error_label.pack(pady=(4, 4))
+
+        # ── buttons ───────────────────────────────────────────────────
+        btn_frame = ctk.CTkFrame(main, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=30, pady=(4, 20))
+        btn_frame.grid_columnconfigure(0, weight=1)
+        btn_frame.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkButton(
+            btn_frame, text="❌ Cancel",
+            font=ctk.CTkFont(family="Inter", size=14, weight="bold"),
+            fg_color="#FF3377", text_color="#FFFFFF",
+            hover_color="#CC2266", height=40,
+            command=self._cancel,
+        ).grid(row=0, column=0, padx=(0, 5), sticky="ew")
+
+        ctk.CTkButton(
+            btn_frame, text="✅ Import",
+            font=ctk.CTkFont(family="Inter", size=14, weight="bold"),
+            fg_color=self.ACCENT, text_color=self.BG,
+            hover_color="#00CC88", height=40,
+            command=self._confirm,
+        ).grid(row=0, column=1, padx=(5, 0), sticky="ew")
+
+        self.protocol("WM_DELETE_WINDOW", self._cancel)
+
+    def _paste_phrase(self):
+        """Read the clipboard and distribute words across the 12 entries.
+
+        Accepts any whitespace-separated phrase. If the user pastes more
+        than 12 words, the extras are ignored; if fewer, the remaining
+        entries are left untouched. Validation happens in _confirm.
+        """
+        try:
+            clipboard_text = self.clipboard_get()
+        except Exception:
+            self.error_label.configure(text="Clipboard is empty or unreadable")
+            return
+
+        words = clipboard_text.strip().lower().split()
+        for entry, word in zip(self.word_entries, words):
+            entry.delete(0, "end")
+            entry.insert(0, word)
+
+    def _toggle_show_password(self):
+        self._show_password = not self._show_password
+        show_char = "" if self._show_password else "*"
+        self.pass_entry.configure(show=show_char)
+        self.confirm_entry.configure(show=show_char)
+        self.show_btn.configure(text="🙈 Hide password" if self._show_password else "👁 Show password")
+
+    def _confirm(self):
+        # ── collect & validate words ──────────────────────────────────
+        words = [e.get().strip().lower() for e in self.word_entries]
+
+        if any(not w for w in words):
+            self.error_label.configure(text="All 12 words are required")
+            return
+
+        if not validate_mnemonic(words):
+            # validate_mnemonic checks both the wordlist membership and
+            # the checksum bits, so this catches typos as well as random
+            # made-up phrases.
+            self.error_label.configure(text="Invalid mnemonic (wrong words or checksum)")
+            return
+
+        # ── validate password ─────────────────────────────────────────
+        p1 = self.pass_entry.get()
+        p2 = self.confirm_entry.get()
+        if not p1:
+            self.error_label.configure(text="Password cannot be empty")
+            return
+        if p1 != p2:
+            self.error_label.configure(text="Passwords do not match")
+            return
+
+        self._words = words
+        self._password = p1
+        self.destroy()
+
+    def _cancel(self):
+        self._words = None
+        self._password = None
+        self.destroy()
+
+    def get_result(self):
+        """Returns (words, password) on success, or None if cancelled."""
+        if self._words is None or self._password is None:
+            return None
+        return self._words, self._password
+
 
 # ── Tests
 if __name__ == "__main__":

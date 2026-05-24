@@ -6,6 +6,7 @@ from decimal import Decimal
 import threading
 import json
 import os
+import hashlib
 
 # Backend imports
 from wallet.crypto.keys import derive_private_key, private_key_to_address
@@ -93,23 +94,82 @@ class DashboardScreen(ctk.CTkFrame):
     # ================================================================
     #  SETTINGS MANAGEMENT (PERSISTENCE)
     # ================================================================
-    def _load_settings(self) -> dict:
-        """Loads user settings (accounts and tokens) from a local file."""
-        if os.path.exists("app_settings.json"):
-            try:
-                with open("app_settings.json", "r") as f:
-                    return json.load(f)
-            except Exception as e:
-                print(f"[Dashboard] Error while reading settings: {e}")
-        return {"account_count": 1, "tokens": []}
+    #
+    # Settings are stored per-wallet to avoid leaking state between wallets
+    # that share the same machine. Each wallet is identified by a SHA-256
+    # hash of its seed (truncated to 16 hex chars). The raw seed is NEVER
+    # written to disk - only the derived ID.
+    #
+    # File layout:
+    #   {
+    #     "wallets": {
+    #       "<wallet_id>": {"account_count": N, "tokens": [...]},
+    #       ...
+    #     }
+    #   }
+    # ================================================================
 
-    def _save_setting(self, key: str, value: any):
-        """Updates and saves a specific key in the settings file."""
-        settings = self._load_settings()
-        settings[key] = value
+    SETTINGS_FILE = "app_settings.json"
+    DEFAULT_WALLET_SETTINGS = {"account_count": 1, "tokens": []}
+
+    def _wallet_id(self) -> Optional[str]:
+        """Stable per-wallet identifier derived from the seed.
+
+        Returns None when no seed is loaded (e.g. before login).
+        Uses SHA-256 truncated to 16 hex chars - enough to avoid collisions
+        across a user's wallets, while never exposing the seed itself.
+        """
+        if self.seed is None:
+            return None
+        return hashlib.sha256(self.seed).hexdigest()[:16]
+
+    def _read_all_settings(self) -> dict:
+        """Reads the entire settings file. Returns {} on missing/invalid file."""
+        if not os.path.exists(self.SETTINGS_FILE):
+            return {}
         try:
-            with open("app_settings.json", "w") as f:
-                json.dump(settings, f)
+            with open(self.SETTINGS_FILE, "r") as f:
+                data = json.load(f)
+                return data if isinstance(data, dict) else {}
+        except Exception as e:
+            print(f"[Dashboard] Error while reading settings: {e}")
+            return {}
+
+    def _load_settings(self) -> dict:
+        """Loads settings for the CURRENTLY active wallet only.
+
+        New wallets (whose ID is not in the file yet) get a fresh copy
+        of DEFAULT_WALLET_SETTINGS - this is what fixes the "new wallet
+        shows old accounts" bug.
+        """
+        wid = self._wallet_id()
+        if wid is None:
+            return dict(self.DEFAULT_WALLET_SETTINGS)
+
+        all_settings = self._read_all_settings()
+        wallets = all_settings.get("wallets", {})
+        wallet_settings = wallets.get(wid)
+
+        if wallet_settings is None:
+            # Brand new wallet - return defaults, don't write yet
+            return dict(self.DEFAULT_WALLET_SETTINGS)
+        return wallet_settings
+
+    def _save_setting(self, key: str, value):
+        """Updates and saves a specific key under the current wallet's namespace."""
+        wid = self._wallet_id()
+        if wid is None:
+            print("[Dashboard] Refusing to save settings without a loaded wallet")
+            return
+
+        all_settings = self._read_all_settings()
+        wallets = all_settings.setdefault("wallets", {})
+        wallet_settings = wallets.setdefault(wid, dict(self.DEFAULT_WALLET_SETTINGS))
+        wallet_settings[key] = value
+
+        try:
+            with open(self.SETTINGS_FILE, "w") as f:
+                json.dump(all_settings, f)
         except Exception as e:
             print(f"[Dashboard] Error while saving settings: {e}")
 
